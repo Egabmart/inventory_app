@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from typing import Callable, List
 from html import escape
-
-from PyQt6.QtGui import QTextDocument
+from PyQt6.QtCore import QMarginsF
+from PyQt6.QtGui import QTextDocument, QPageLayout
 from PyQt6.QtWidgets import (
     QFileDialog,
     QLabel,
@@ -225,7 +225,7 @@ def export_table_to_pdf(table: QTableWidget, parent: QWidget | None = None) -> N
     printer = QPrinter(QPrinter.PrinterMode.HighResolution)
     printer.setOutputFormat(QPrinter.OutputFormat.PdfFormat)
     printer.setOutputFileName(path)
-    printer.setPageMargins(12, 12, 12, 12, QPrinter.Unit.Millimeter)
+    printer.setPageMargins(QMarginsF(12, 12, 12, 12), QPageLayout.Unit.Millimeter)
 
     document = QTextDocument()
     document.setDocumentMargin(12)
