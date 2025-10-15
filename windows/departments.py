@@ -196,7 +196,9 @@ class SubDepartmentDetailWindow(QMainWindow):
             new_name = dlg.new_name()
             if new_name:
                 storage.rename_subdepartment(self.subdepartment, new_name)
+                self.subdepartment.name = new_name
                 self.setWindowTitle(f"{self.subdepartment.name} - Products")
+                self.parent_window.refresh_subdepartments()
 
     def delete_subdepartment(self):
         if storage.count_products(self.subdepartment) > 0:

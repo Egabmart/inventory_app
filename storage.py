@@ -61,6 +61,16 @@ def init_db():
         FOREIGN KEY(local_id) REFERENCES locals(local_id) ON DELETE CASCADE,
         FOREIGN KEY(prod_id) REFERENCES products(prod_id) ON DELETE CASCADE
     )""" )
+    cols = {row[1] for row in cur.execute("PRAGMA table_info(local_products)")}
+    if "quantity" not in cols:
+        cur.execute("ALTER TABLE local_products ADD COLUMN quantity INTEGER NOT NULL DEFAULT 0")
+    # Backwards compatibility: older databases may be missing the quantity column on
+    # the local_products table.  Ensure it exists so newer code paths can rely on it.
+    existing_columns = conn.execute("PRAGMA table_info(local_products)").fetchall()
+    if not any(col[1] == "quantity" for col in existing_columns):
+        conn.execute("ALTER TABLE local_products ADD COLUMN quantity INTEGER NOT NULL DEFAULT 0")
+        conn.execute("UPDATE local_products SET quantity = 0 WHERE quantity IS NULL")
+
     cur.execute("""CREATE TABLE IF NOT EXISTS sold_products(
         sale_id TEXT PRIMARY KEY,
         prod_id TEXT NOT NULL,

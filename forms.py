@@ -114,6 +114,25 @@ class AddProductForm(QDialog):
         except Exception: pass
         self.close()
 
+class EditSubDepartmentNameDialog(QDialog):
+    def __init__(self, subdepartment: SubDepartment, parent=None):
+        super().__init__(parent); self.subdepartment = subdepartment; self._name = subdepartment.name
+        self.setWindowTitle("Rename Sub Department"); self.setFixedSize(360, 150)
+        form = QFormLayout(self); self.input_name = QLineEdit(subdepartment.name)
+        form.addRow("Name:", self.input_name)
+        btn_row = QHBoxLayout(); self.save_btn = QPushButton("Save"); self.cancel_btn = QPushButton("Cancel")
+        btn_row.addStretch(1); btn_row.addWidget(self.save_btn); btn_row.addWidget(self.cancel_btn); form.addRow(btn_row)
+        self.save_btn.clicked.connect(self._save); self.cancel_btn.clicked.connect(self.reject)
+
+    def _save(self):
+        name = self.input_name.text().strip()
+        if not name:
+            QMessageBox.warning(self, "Invalid name", "Please enter a name."); return
+        self._name = name; self.accept()
+
+    def new_name(self) -> str:
+        return self._name
+
 class LocalPickerDialog(QDialog):
     def __init__(self, product: Product, parent=None):
         super().__init__(parent); self.setWindowTitle("Add to Local"); self.setFixedSize(360,180); self.product = product
