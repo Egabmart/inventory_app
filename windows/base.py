@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 from typing import Callable, List
+from html import escape
 
-from PyQt6.QtCore import QPoint
-from PyQt6.QtGui import QPainter
+from PyQt6.QtGui import QTextDocument
 from PyQt6.QtWidgets import (
     QFileDialog,
     QLabel,
@@ -164,6 +164,55 @@ def export_table_to_xlsx(table: QTableWidget, parent: QWidget | None = None) -> 
     QMessageBox.information(parent, "Export successful", f"Table exported to:\n{path}")
 
 
+_PDF_TABLE_TEMPLATE = """
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset=\"utf-8\">
+    <style>
+        body {{ font-family: Arial, Helvetica, sans-serif; font-size: 11pt; margin: 0; }}
+        table {{ border-collapse: collapse; width: 100%; }}
+        th, td {{ border: 1px solid #444; padding: 6px 8px; text-align: left; }}
+        th {{ background-color: #f2f2f2; font-weight: 600; }}
+        tbody tr:nth-child(even) {{ background-color: #fafafa; }}
+    </style>
+</head>
+<body>
+    <table>
+        <thead>
+            <tr>{header}</tr>
+        </thead>
+        <tbody>
+            {rows}
+        </tbody>
+    </table>
+</body>
+</html>
+""".strip()
+
+
+def _table_to_pdf_html(table: QTableWidget) -> str:
+    """Build an HTML representation of a table suitable for PDF export."""
+
+    headers = _table_headers(table)
+    if headers:
+        header_html = "".join(f"<th>{escape(text)}</th>" for text in headers)
+    else:
+        header_html = "<th>Table</th>"
+
+    rows = _table_rows(table)
+    if rows:
+        row_html = [
+            "<tr>" + "".join(f"<td>{escape(cell)}</td>" for cell in row) + "</tr>"
+            for row in rows
+        ]
+    else:
+        colspan = max(len(headers), 1)
+        row_html = [f"<tr><td colspan=\"{colspan}\">No data available</td></tr>"]
+
+    return _PDF_TABLE_TEMPLATE.format(header=header_html, rows="\n".join(row_html))
+
+
 def export_table_to_pdf(table: QTableWidget, parent: QWidget | None = None) -> None:
     """Render a QTableWidget to a PDF file."""
 
@@ -178,23 +227,14 @@ def export_table_to_pdf(table: QTableWidget, parent: QWidget | None = None) -> N
     printer.setOutputFileName(path)
     printer.setPageMargins(12, 12, 12, 12, QPrinter.Unit.Millimeter)
 
-    painter = QPainter()
-    if not painter.begin(printer):
-        QMessageBox.critical(parent, "Export failed", "Could not write to PDF file.")
-        return
+    document = QTextDocument()
+    document.setDocumentMargin(12)
+    document.setHtml(_table_to_pdf_html(table))
 
     try:
-        table.resizeColumnsToContents()
-        table.resizeRowsToContents()
-        table_size = table.sizeHint()
-        page_rect = printer.pageRect()
-        if table_size.width() > 0 and table_size.height() > 0:
-            scale = min(page_rect.width() / table_size.width(), page_rect.height() / table_size.height())
-            painter.scale(scale, scale)
-        table.render(painter, targetOffset=QPoint(0, 0))
+        document.print(printer)
     except Exception as exc:  # pragma: no cover - GUI warning
         QMessageBox.critical(parent, "Export failed", f"Could not export to PDF:\n{exc}")
-    finally:
-        painter.end()
+        return
 
     QMessageBox.information(parent, "Export successful", f"Table exported to:\n{path}")
