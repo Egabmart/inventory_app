@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Callable, List
+from typing import Callable, ClassVar, List
 from html import escape
 from PyQt6.QtCore import QMarginsF
 from PyQt6.QtGui import QTextDocument, QPageLayout
@@ -23,6 +23,8 @@ from .. import storage
 
 class BaseWindow(QMainWindow):
     """Shared application window layout with top navigation."""
+
+    _open_windows: ClassVar[List["BaseWindow"]] = []
 
     def __init__(self, title: str, current_section: str) -> None:
         super().__init__()
@@ -64,6 +66,7 @@ class BaseWindow(QMainWindow):
         self.setCentralWidget(central)
 
         self._apply_section_state()
+        self._register_window(self)
 
     # ---- navigation helpers -------------------------------------------------
     def _apply_section_state(self) -> None:
@@ -77,6 +80,18 @@ class BaseWindow(QMainWindow):
             button.setEnabled(not is_current)
             button.setStyleSheet("font-weight: 600;" if is_current else "")
 
+    @classmethod
+    def _register_window(cls, window: "BaseWindow") -> None:
+        cls._open_windows.append(window)
+
+        def _on_destroyed(*_: object) -> None:
+            try:
+                cls._open_windows.remove(window)
+            except ValueError:
+                pass
+
+        window.destroyed.connect(_on_destroyed)
+        
     def _open_window(self, factory: Callable[[], "BaseWindow"]) -> None:
         next_window = factory()
         next_window.show()
