@@ -30,7 +30,7 @@ class BaseWindow(QMainWindow):
         super().__init__()
         self.setWindowTitle(title)
         self.resize(1024, 720)
-        self._current_section = current_section
+        self._current_section = current_section 
 
         storage.init_db()
 
@@ -42,7 +42,7 @@ class BaseWindow(QMainWindow):
         nav = QHBoxLayout()
         nav.setSpacing(8)
 
-        title_lbl = QLabel("Ciao a Mano - Inventory Management")
+        title_lbl = QLabel("Inventory Management")
         title_font = title_lbl.font()
         title_font.setPointSize(title_font.pointSize() + 2)
         title_font.setBold(True)
