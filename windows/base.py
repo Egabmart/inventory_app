@@ -42,7 +42,7 @@ class BaseWindow(QMainWindow):
         nav = QHBoxLayout()
         nav.setSpacing(8)
 
-        title_lbl = QLabel("Inventory Manager")
+        title_lbl = QLabel("Ciao a Mano - Inventory Management")
         title_font = title_lbl.font()
         title_font.setPointSize(title_font.pointSize() + 2)
         title_font.setBold(True)
