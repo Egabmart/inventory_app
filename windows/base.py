@@ -96,27 +96,32 @@ class BaseWindow(QMainWindow):
         sidebar_layout.setContentsMargins(12, 12, 12, 12)
         sidebar_layout.setSpacing(8)
 
-        self.home_btn = NavButton("Home")
+    
         self.depts_btn = NavButton("Departments")
         self.locals_btn = NavButton("Locals")
-        sidebar_layout.addWidget(self.home_btn)
+        self.sales_btn = NavButton("Sales")
+        self.search_btn = NavButton("Search")
         sidebar_layout.addWidget(self.depts_btn)
         sidebar_layout.addWidget(self.locals_btn)
+        sidebar_layout.addWidget(self.sales_btn)
+        sidebar_layout.addWidget(self.search_btn)
         sidebar_layout.addStretch(1)
 
         self.nav_group = QButtonGroup(self)
         self.nav_group.setExclusive(True)
         self._nav_buttons: Dict[str, NavButton] = {
-            "Home": self.home_btn,
             "Departments": self.depts_btn,
             "Locals": self.locals_btn,
+            "Sales": self.sales_btn,
+            "Search": self.search_btn,
         }
         for button in self._nav_buttons.values():
             self.nav_group.addButton(button)
 
-        self.home_btn.clicked.connect(self.open_home)
         self.depts_btn.clicked.connect(self.open_departments)
         self.locals_btn.clicked.connect(self.open_locals)
+        self.sales_btn.clicked.connect(self.open_sales)
+        self.search_btn.clicked.connect(self.open_search)
 
         grid.addWidget(sidebar, 1, 0)
 
@@ -187,13 +192,6 @@ class BaseWindow(QMainWindow):
         next_window.show()
         self.close()
 
-    def open_home(self) -> None:
-        if self._current_section == "Home":
-            return
-        from .home import HomeWindow
-
-        self._open_window(HomeWindow)
-
     def open_departments(self) -> None:
         if self._current_section == "Departments":
             return
@@ -207,6 +205,20 @@ class BaseWindow(QMainWindow):
         from .locals import LocalsWindow
 
         self._open_window(LocalsWindow)
+
+    def open_sales(self) -> None:
+        if self._current_section == "Sales":
+            return
+        from .sales import SalesWindow
+
+        self._open_window(SalesWindow)
+
+    def open_search(self) -> None:
+        if self._current_section == "Search":
+            return
+        from .search import SearchWindow
+
+        self._open_window(SearchWindow)
 
         # ---- exposed helpers ------------------------------------------------
     @property
