@@ -1,10 +1,12 @@
 from __future__ import annotations
 
-from typing import Callable, ClassVar, List
+from typing import Callable, ClassVar, Dict, List
 from html import escape
-from PyQt6.QtCore import QMarginsF
+from PyQt6.QtCore import QMarginsF,Qt
 from PyQt6.QtGui import QTextDocument, QPageLayout
 from PyQt6.QtWidgets import (
+    QButtonGroup,
+    QGridLayout,
     QFileDialog,
     QLabel,
     QHBoxLayout,
@@ -21,6 +23,36 @@ from PyQt6.QtPrintSupport import QPrinter
 from .. import storage
 
 
+class NavButton(QPushButton):
+    """Navigation button styled to match the refreshed layout."""
+
+    def __init__(self, text: str, *, checkable: bool = True, parent: QWidget | None = None) -> None:
+        super().__init__(text, parent)
+        self.setCheckable(checkable)
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.setFixedHeight(40)
+        self.setStyleSheet(
+            """
+            QPushButton {
+                color: #e9f2ef;
+                background: transparent;
+                border: none;
+                text-align: left;
+                padding: 10px 12px;
+                border-radius: 6px;
+                font-weight: 500;
+            }
+            QPushButton:hover {
+                background: rgba(255,255,255,0.1);
+            }
+            QPushButton:checked {
+                background: #67b7aa;
+                color: #ffffff;
+            }
+        """
+        )
+
+
 class BaseWindow(QMainWindow):
     """Shared application window layout with top navigation."""
 
@@ -29,56 +61,114 @@ class BaseWindow(QMainWindow):
     def __init__(self, title: str, current_section: str) -> None:
         super().__init__()
         self.setWindowTitle(title)
-        self.resize(1024, 720)
+        self.resize(1100, 720)
         self._current_section = current_section 
 
         storage.init_db()
 
         central = QWidget()
-        layout = QVBoxLayout(central)
-        layout.setContentsMargins(16, 16, 16, 16)
-        layout.setSpacing(12)
+        grid = QGridLayout(central)
+        grid.setContentsMargins(16, 16, 16, 16)
+        grid.setHorizontalSpacing(12)
+        grid.setVerticalSpacing(12)
 
-        nav = QHBoxLayout()
-        nav.setSpacing(8)
+        # ---- Top bar ------------------------------------------------------
+        topbar = QWidget()
+        topbar.setObjectName("TopBar")
+        top_layout = QHBoxLayout(topbar)
+        top_layout.setContentsMargins(16, 8, 16, 8)
+        top_layout.setSpacing(12)
 
-        title_lbl = QLabel("Inventory Management")
-        title_font = title_lbl.font()
-        title_font.setPointSize(title_font.pointSize() + 2)
-        title_font.setBold(True)
-        title_lbl.setFont(title_font)
-        nav.addWidget(title_lbl)
-        nav.addStretch(1)
+        self._brand_label = QLabel("Inventory App")
+        self._brand_label.setStyleSheet(
+            "background: transparent; color: white; font-weight: 600; font-size: 18px;"
+        )
+        top_layout.addWidget(self._brand_label)
+        top_layout.addStretch(1)
 
-        self.home_btn = QPushButton("Home")
-        self.depts_btn = QPushButton("Departments")
-        self.locals_btn = QPushButton("Locals")
+        grid.addWidget(topbar, 0, 0, 1, 2)
+
+        # ---- Sidebar -----------------------------------------------------
+        sidebar = QWidget()
+        sidebar.setObjectName("SideBar")
+        sidebar.setFixedWidth(200)
+        sidebar_layout = QVBoxLayout(sidebar)
+        sidebar_layout.setContentsMargins(12, 12, 12, 12)
+        sidebar_layout.setSpacing(8)
+
+        self.home_btn = NavButton("Home")
+        self.depts_btn = NavButton("Departments")
+        self.locals_btn = NavButton("Locals")
+        sidebar_layout.addWidget(self.home_btn)
+        sidebar_layout.addWidget(self.depts_btn)
+        sidebar_layout.addWidget(self.locals_btn)
+        sidebar_layout.addStretch(1)
+
+        self.nav_group = QButtonGroup(self)
+        self.nav_group.setExclusive(True)
+        self._nav_buttons: Dict[str, NavButton] = {
+            "Home": self.home_btn,
+            "Departments": self.depts_btn,
+            "Locals": self.locals_btn,
+        }
+        for button in self._nav_buttons.values():
+            self.nav_group.addButton(button)
 
         self.home_btn.clicked.connect(self.open_home)
         self.depts_btn.clicked.connect(self.open_departments)
         self.locals_btn.clicked.connect(self.open_locals)
 
-        nav.addWidget(self.home_btn)
-        nav.addWidget(self.depts_btn)
-        nav.addWidget(self.locals_btn)
+        grid.addWidget(sidebar, 1, 0)
 
-        layout.addLayout(nav)
+        # ---- Content area ------------------------------------------------
+        content = QWidget()
+        content.setObjectName("Content")
+        self._content_layout = QVBoxLayout(content)
+        self._content_layout.setContentsMargins(24, 24, 24, 24)
+        self._content_layout.setSpacing(16)
+
+        self._page_title = QLabel()
+        self._page_title.setStyleSheet("background: transparent; font-size: 26px; font-weight: 700; color: #1a1a1a;")
+        self._page_title.setContentsMargins(0, 0, 0, 8)
+        self._content_layout.addWidget(self._page_title)
+
+        grid.addWidget(content, 1, 1)
+
+        grid.setRowStretch(0, 0)
+        grid.setRowStretch(1, 1)
+        grid.setColumnStretch(0, 0)
+        grid.setColumnStretch(1, 1)
+
         self.setCentralWidget(central)
+        self.setStyleSheet(
+            """
+            QWidget { background: #f5f6f8; }
 
+            #TopBar {
+                background: #4ca797;
+                border-radius: 10px;
+            }
+
+            #SideBar {
+                background: #2f7f75;
+                border-radius: 10px;
+            }
+
+            #Content {
+                background: #ffffff;
+                border-radius: 10px;
+            }
+        """
+        )
+
+        self.set_page_title(current_section)
         self._apply_section_state()
         self._register_window(self)
 
     # ---- navigation helpers -------------------------------------------------
     def _apply_section_state(self) -> None:
-        buttons = {
-            "Home": self.home_btn,
-            "Departments": self.depts_btn,
-            "Locals": self.locals_btn,
-        }
-        for name, button in buttons.items():
-            is_current = name == self._current_section
-            button.setEnabled(not is_current)
-            button.setStyleSheet("font-weight: 600;" if is_current else "")
+        for name, button in self._nav_buttons.items():
+            button.setChecked(name == self._current_section)
 
     @classmethod
     def _register_window(cls, window: "BaseWindow") -> None:
@@ -117,6 +207,14 @@ class BaseWindow(QMainWindow):
         from .locals import LocalsWindow
 
         self._open_window(LocalsWindow)
+
+        # ---- exposed helpers ------------------------------------------------
+    @property
+    def content_layout(self) -> QVBoxLayout:
+        return self._content_layout
+
+    def set_page_title(self, text: str) -> None:
+        self._page_title.setText(text)
 
 
 def _table_headers(table: QTableWidget) -> List[str]:

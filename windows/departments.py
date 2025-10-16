@@ -8,8 +8,12 @@ from .. import storage
 class DepartmentsWindow(BaseWindow):
     def __init__(self):
         super().__init__("Departments - My App", "Departments")
-        main_layout = self.centralWidget().layout()  # type: ignore[attr-defined]
+        self.set_page_title("Departments")
+        main_layout = self.content_layout
+        
         btn_row = QHBoxLayout()
+        btn_row.setContentsMargins(0, 0, 0, 0)
+        btn_row.setSpacing(12)
         self.add_button = QPushButton("Create Department")
         self.rename_button = QPushButton("Rename Department")
         self.delete_button = QPushButton("Delete Department")

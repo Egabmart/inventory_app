@@ -7,8 +7,12 @@ from ..forms import EditProductDialog, RegisterSaleDialog
 class HomeWindow(BaseWindow):
     def __init__(self):
         super().__init__("Home - My App", "Home")
-        main_layout = self.centralWidget().layout()  # type: ignore[attr-defined]
+        self.set_page_title("Home")
+        main_layout = self.content_layout
+
         toolbar = QHBoxLayout()
+        toolbar.setContentsMargins(0, 0, 0, 0)
+        toolbar.setSpacing(12)
         self.btn_open_search = QPushButton("Search Products")
         self.btn_register_sales = QPushButton("Register sales")
         toolbar.addWidget(self.btn_open_search); toolbar.addWidget(self.btn_register_sales); toolbar.addStretch(1)

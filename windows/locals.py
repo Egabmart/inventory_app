@@ -7,8 +7,12 @@ from .. import storage
 class LocalsWindow(BaseWindow):
     def __init__(self):
         super().__init__("Locals - My App", "Locals")
-        main_layout = self.centralWidget().layout()  # type: ignore[attr-defined]
+        self.set_page_title("Locals")
+        main_layout = self.content_layout
+
         btn_row = QHBoxLayout()
+        btn_row.setContentsMargins(0, 0, 0, 0)
+        btn_row.setSpacing(12)
         self.add_button = QPushButton("Create Local"); self.delete_button = QPushButton("Delete Local")
         self.export_xlsx_btn = QPushButton("Export XLSX"); self.export_pdf_btn = QPushButton("Export PDF")
         btn_row.addWidget(self.add_button); btn_row.addWidget(self.delete_button); btn_row.addStretch(1); btn_row.addWidget(self.export_xlsx_btn); btn_row.addWidget(self.export_pdf_btn)
