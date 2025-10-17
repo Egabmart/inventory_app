@@ -1,4 +1,17 @@
-from PyQt6.QtWidgets import QWidget, QVBoxLayout, QPushButton, QTableWidget, QTableWidgetItem, QHeaderView, QHBoxLayout, QMessageBox, QMainWindow, QInputDialog, QLabel
+from PyQt6.QtWidgets import (
+    QWidget,
+    QVBoxLayout,
+    QPushButton,
+    QTableWidget,
+    QTableWidgetItem,
+    QHeaderView,
+    QHBoxLayout,
+    QMessageBox,
+    QMainWindow,
+    QInputDialog,
+    QLabel,
+    QStackedWidget,
+)
 from PyQt6.QtCore import Qt
 from .base import BaseWindow, export_table_to_xlsx, export_table_to_pdf
 from ..forms import AddDepartmentForm, AddSubDepartmentForm, AddProductForm, EditProductDialog, EditSubDepartmentNameDialog
@@ -10,7 +23,14 @@ class DepartmentsWindow(BaseWindow):
         super().__init__("Departments - My App", "Departments")
         self.set_page_title("Departments")
         main_layout = self.content_layout
-        
+        self.stack = QStackedWidget()
+        main_layout.addWidget(self.stack)
+
+        # --- Departments page -------------------------------------------------
+        self.dept_page = QWidget()
+        dept_layout = QVBoxLayout(self.dept_page)
+        dept_layout.setContentsMargins(0, 0, 0, 0)
+        dept_layout.setSpacing(16)
         btn_row = QHBoxLayout()
         btn_row.setContentsMargins(0, 0, 0, 0)
         btn_row.setSpacing(12)
@@ -20,7 +40,7 @@ class DepartmentsWindow(BaseWindow):
         self.export_xlsx_btn = QPushButton("Export XLSX"); self.export_pdf_btn = QPushButton("Export PDF")
         btn_row.addWidget(self.add_button); btn_row.addWidget(self.rename_button); btn_row.addWidget(self.delete_button)
         btn_row.addStretch(1); btn_row.addWidget(self.export_xlsx_btn); btn_row.addWidget(self.export_pdf_btn)
-        main_layout.insertLayout(1, btn_row)
+        dept_layout.addLayout(btn_row)
         self.add_button.clicked.connect(self.show_add_form)
         self.rename_button.clicked.connect(self.rename_selected_dept)
         self.delete_button.clicked.connect(self.delete_selected_dept)
@@ -35,10 +55,50 @@ class DepartmentsWindow(BaseWindow):
         header = self.table.horizontalHeader()
         header.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
         header.setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
-        main_layout.addWidget(self.table)
+        dept_layout.addWidget(self.table)
+
+        self.stack.addWidget(self.dept_page)
+
+        # --- Sub-departments page --------------------------------------------
+        self.sub_page = QWidget()
+        sub_layout = QVBoxLayout(self.sub_page)
+        sub_layout.setContentsMargins(0, 0, 0, 0)
+        sub_layout.setSpacing(16)
+
+        sub_top = QHBoxLayout()
+        sub_top.setContentsMargins(0, 0, 0, 0)
+        sub_top.setSpacing(12)
+        self.back_button = QPushButton("Back")
+        self.add_sub_button = QPushButton("Add Sub Department")
+        self.sub_title_label = QLabel()
+        self.sub_title_label.setStyleSheet("font-weight: 600; font-size: 18px;")
+        sub_top.addWidget(self.back_button)
+        sub_top.addStretch(1)
+        sub_top.addWidget(self.sub_title_label)
+        sub_top.addStretch(1)
+        sub_top.addWidget(self.add_sub_button)
+        sub_layout.addLayout(sub_top)
+
+        self.sub_table = QTableWidget(0, 2)
+        self.sub_table.setHorizontalHeaderLabels(["Name", "Number of items"])
+        self.sub_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        self.sub_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
+        self.sub_table.setSelectionMode(QTableWidget.SelectionMode.SingleSelection)
+        self.sub_table.verticalHeader().setVisible(False)
+        sub_header = self.sub_table.horizontalHeader()
+        sub_header.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
+        sub_header.setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
+        sub_layout.addWidget(self.sub_table)
+
+        self.stack.addWidget(self.sub_page)
         storage.init_db()
+        self.active_department: Department | None = None
         self.refresh_departments()
+        self.stack.setCurrentWidget(self.dept_page)
         self.table.cellDoubleClicked.connect(self.open_department_detail)
+        self.back_button.clicked.connect(self.show_departments_page)
+        self.add_sub_button.clicked.connect(self.show_add_sub_form)
+        self.sub_table.cellDoubleClicked.connect(self.open_sub_detail)
 
     def refresh_departments(self):
         self.depts = storage.list_departments(); self.table.setRowCount(0)
@@ -71,59 +131,51 @@ class DepartmentsWindow(BaseWindow):
             QMessageBox.warning(self, "Cannot delete", "This department is not empty."); return
         self.refresh_departments()
 
+    def show_departments_page(self):
+        self.active_department = None
+        self.set_page_title("Departments")
+        self.refresh_departments()
+        self.stack.setCurrentWidget(self.dept_page)
+
     def open_department_detail(self, row: int, _col: int):
         dept_id = self.table.item(row, 0).data(Qt.ItemDataRole.UserRole)
         d = next((x for x in self.depts if x.dept_id == dept_id), None)
-        if d:
-            self.detail = DepartmentDetailWindow(d, self); self.detail.show(); self.hide()
-
-class DepartmentDetailWindow(QMainWindow):
-    def __init__(self, department: Department, parent_window: DepartmentsWindow):
-        super().__init__(); self.department = department; self.parent_window = parent_window
-        self.setWindowTitle(f"{department.name} - Department"); self.resize(900, 600)
-        central = QWidget(); layout = QVBoxLayout(central); self.setCentralWidget(central)
-        top = QHBoxLayout()
-        self.back_button = QPushButton("Back"); self.add_sub_button = QPushButton("Add Sub Department")
-        top.addWidget(self.back_button); top.addStretch(1); top.addWidget(self.add_sub_button)
-        layout.addLayout(top)
-        self.back_button.clicked.connect(self.go_back); self.add_sub_button.clicked.connect(self.show_add_sub_form)
-        self.table = QTableWidget(0, 2)
-        self.table.setHorizontalHeaderLabels(["Name", "Number of items"])
-        self.table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
-        self.table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
-        self.table.setSelectionMode(QTableWidget.SelectionMode.SingleSelection)
-        self.table.verticalHeader().setVisible(False)
-        header = self.table.horizontalHeader()
-        header.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
-        header.setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
-        layout.addWidget(self.table)
-        self.table.cellDoubleClicked.connect(self.open_sub_detail)
+        if not d:
+            return
+        self.active_department = d
+        self.sub_title_label.setText(d.name)
+        self.set_page_title(f"{d.name} - Sub Departments")
         self.refresh_subdepartments()
-
-    def go_back(self):
-        self.parent_window.refresh_departments(); self.parent_window.show(); self.close()
-
-    def show_add_sub_form(self):
-        dlg = AddSubDepartmentForm(self.department, self); dlg.exec()
+        self.stack.setCurrentWidget(self.sub_page)
 
     def refresh_subdepartments(self):
-        self.subs = storage.list_subdepartments(self.department); self.table.setRowCount(0)
+        if not self.active_department:
+            self.sub_table.setRowCount(0)
+            return
+        self.subs = storage.list_subdepartments(self.active_department)
+        self.sub_table.setRowCount(0)
         for s in self.subs:
-            row = self.table.rowCount(); self.table.insertRow(row)
+            row = self.sub_table.rowCount(); self.sub_table.insertRow(row)
             name_item = QTableWidgetItem(s.name); name_item.setData(Qt.ItemDataRole.UserRole, s.sub_id)
             cnt = storage.count_products(s)
             cnt_item = QTableWidgetItem(str(cnt)); cnt_item.setTextAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
-            self.table.setItem(row, 0, name_item); self.table.setItem(row, 1, cnt_item)
+            self.sub_table.setItem(row, 0, name_item); self.sub_table.setItem(row, 1, cnt_item)
+
+    def show_add_sub_form(self):
+        if not self.active_department:
+            return
+        dlg = AddSubDepartmentForm(self.active_department, self); dlg.exec()
 
     def open_sub_detail(self, row: int, _col: int):
-        sub_id = self.table.item(row, 0).data(Qt.ItemDataRole.UserRole)
+        if not self.active_department:
+            return
+        sub_id = self.sub_table.item(row, 0).data(Qt.ItemDataRole.UserRole)
         s = next((x for x in self.subs if x.sub_id == sub_id), None)
         if s:
             self.detail = SubDepartmentDetailWindow(s, self); self.detail.show(); self.hide()
 
-from PyQt6.QtWidgets import QTableWidget, QTableWidgetItem
 class SubDepartmentDetailWindow(QMainWindow):
-    def __init__(self, subdepartment: SubDepartment, parent_window: DepartmentDetailWindow):
+    def __init__(self, subdepartment: SubDepartment, parent_window: DepartmentsWindow):
         super().__init__(); self.subdepartment = subdepartment; self.parent_window = parent_window
         self.setWindowTitle(f"{subdepartment.name} - Products"); self.resize(1000, 620)
         central = QWidget(); layout = QVBoxLayout(central); self.setCentralWidget(central)
