@@ -106,7 +106,15 @@ class AddProductForm(QDialog):
         name = self.input_name.text().strip(); desc = self.input_desc.toPlainText().strip()
         price = self.input_price.text().strip(); qty = self.input_qty.text().strip()
         if not name or not desc or not price or not qty: return
-        sub = self.parent.subdepartment; prod_id = storage.generate_next_product_id(sub)
+        sub = getattr(self.parent, "subdepartment", None)
+        if not sub:
+            QMessageBox.warning(self, "Missing sub department", "Please select a sub department before adding a product.")
+            return
+        try:
+            prod_id = storage.generate_next_product_id(sub)
+        except ValueError:
+            QMessageBox.warning(self, "Missing sub department", "The selected sub department could not be found in storage.")
+            return
         try: product = Product(prod_id, sub, name, desc, float(price), int(qty))
         except ValueError: return
         self.parent.add_product(product)

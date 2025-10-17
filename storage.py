@@ -8,7 +8,13 @@ _MEDIA_ROOT = Path.home() / ".pyqt_inventory_app_media" / "products"
 _ALLOWED_EXT = {".jpg", ".jpeg", ".png", ".webp", ".bmp", ".gif"}
 
 def get_conn():
-    return sqlite3.connect(DB_PATH)
+    conn = sqlite3.connect(DB_PATH)
+    try:
+        conn.execute("PRAGMA foreign_keys = ON")
+    except Exception:
+        conn.close()
+        raise
+    return conn
 
 def init_db():
     conn = get_conn(); cur = conn.cursor()
@@ -197,15 +203,34 @@ def count_local_products(local: Local) -> int:
 
 def generate_next_product_id(sub: SubDepartment) -> str:
     conn = get_conn()
-    row = conn.execute("""SELECT d.abbreviation, s.abbreviation
-                         FROM subdepartments s JOIN departments d ON d.dept_id=s.parent_dept_id
-                         WHERE s.sub_id=?""", (sub.sub_id,)).fetchone()
-    if not row:
-        conn.close(); raise ValueError("Subdepartment not found")
-    d_abbr, s_abbr = row[0], row[1]
-    row = conn.execute("SELECT COUNT(*) FROM products WHERE parent_sub_id=?", (sub.sub_id,)).fetchone()
-    order = int(row[0]) + 1; conn.close()
-    return f"{d_abbr}{s_abbr}{order}"
+    try:
+        row = conn.execute(
+            """SELECT d.abbreviation, s.abbreviation
+                   FROM subdepartments s JOIN departments d ON d.dept_id=s.parent_dept_id
+                   WHERE s.sub_id=?""",
+            (sub.sub_id,),
+        ).fetchone()
+        if row:
+            d_abbr, s_abbr = row[0], row[1]
+        else:
+            d_abbr = getattr(sub.parent, "abbreviation", None)
+            s_abbr = getattr(sub, "abbreviation", None)
+            if not d_abbr or not s_abbr:
+                raise ValueError("Subdepartment not found")
+            exists = conn.execute(
+                "SELECT 1 FROM subdepartments WHERE sub_id=?",
+                (sub.sub_id,),
+            ).fetchone()
+            if not exists:
+                raise ValueError("Subdepartment not found")
+        count_row = conn.execute(
+            "SELECT COUNT(*) FROM products WHERE parent_sub_id=?",
+            (sub.sub_id,),
+        ).fetchone()
+        order = int(count_row[0]) + 1 if count_row else 1
+        return f"{d_abbr}{s_abbr}{order}"
+    finally:
+        conn.close()
 
 def _ensure_media_dir(prod_id: str) -> Path:
     d = _MEDIA_ROOT / prod_id; d.mkdir(parents=True, exist_ok=True); return d
