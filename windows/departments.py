@@ -7,7 +7,6 @@ from PyQt6.QtWidgets import (
     QHeaderView,
     QHBoxLayout,
     QMessageBox,
-    QMainWindow,
     QInputDialog,
     QLabel,
     QStackedWidget,
@@ -91,6 +90,10 @@ class DepartmentsWindow(BaseWindow):
         sub_layout.addWidget(self.sub_table)
 
         self.stack.addWidget(self.sub_page)
+
+         # --- Products page ---------------------------------------------------
+        self.detail_page = SubDepartmentDetailWindow(self)
+        self.stack.addWidget(self.detail_page)
         storage.init_db()
         self.active_department: Department | None = None
         self.refresh_departments()
@@ -137,6 +140,14 @@ class DepartmentsWindow(BaseWindow):
         self.refresh_departments()
         self.stack.setCurrentWidget(self.dept_page)
 
+    def show_subdepartments_page(self):
+        if not self.active_department:
+            self.show_departments_page()
+            return
+        self.set_page_title(f"{self.active_department.name} - Sub Departments")
+        self.refresh_subdepartments()
+        self.stack.setCurrentWidget(self.sub_page)
+
     def open_department_detail(self, row: int, _col: int):
         dept_id = self.table.item(row, 0).data(Qt.ItemDataRole.UserRole)
         d = next((x for x in self.depts if x.dept_id == dept_id), None)
@@ -146,7 +157,7 @@ class DepartmentsWindow(BaseWindow):
         self.sub_title_label.setText(d.name)
         self.set_page_title(f"{d.name} - Sub Departments")
         self.refresh_subdepartments()
-        self.stack.setCurrentWidget(self.sub_page)
+        self.show_subdepartments_page()
 
     def refresh_subdepartments(self):
         if not self.active_department:
@@ -172,19 +183,33 @@ class DepartmentsWindow(BaseWindow):
         sub_id = self.sub_table.item(row, 0).data(Qt.ItemDataRole.UserRole)
         s = next((x for x in self.subs if x.sub_id == sub_id), None)
         if s:
-            self.detail = SubDepartmentDetailWindow(s, self); self.detail.show(); self.hide()
+            self.detail_page.set_subdepartment(s)
+            self.stack.setCurrentWidget(self.detail_page)
 
-class SubDepartmentDetailWindow(QMainWindow):
-    def __init__(self, subdepartment: SubDepartment, parent_window: DepartmentsWindow):
-        super().__init__(); self.subdepartment = subdepartment; self.parent_window = parent_window
-        self.setWindowTitle(f"{subdepartment.name} - Products"); self.resize(1000, 620)
-        central = QWidget(); layout = QVBoxLayout(central); self.setCentralWidget(central)
+class SubDepartmentDetailWindow(QWidget):
+    def __init__(self, parent_window: DepartmentsWindow):
+        super().__init__()
+        self.parent_window = parent_window
+        self.subdepartment: SubDepartment | None = None
+        self.products: list[Product] = []
+
+        layout = QVBoxLayout(self)
         top = QHBoxLayout()
         self.back_button = QPushButton("Back"); self.rate_button = QPushButton("Conversion rate")
         self.rename_sub_btn = QPushButton("Rename Sub Department"); self.delete_sub_btn = QPushButton("Delete Sub Department")
         self.export_xlsx_btn = QPushButton("Export XLSX"); self.export_pdf_btn = QPushButton("Export PDF")
-        top.addWidget(self.back_button); top.addStretch(1); top.addWidget(self.rate_button)
-        top.addWidget(self.rename_sub_btn); top.addWidget(self.delete_sub_btn); top.addStretch(1); top.addWidget(self.export_xlsx_btn); top.addWidget(self.export_pdf_btn)
+        self.sub_title_label = QLabel()
+        self.sub_title_label.setStyleSheet("font-weight: 600; font-size: 18px;")
+        top.addWidget(self.back_button)
+        top.addStretch(1)
+        top.addWidget(self.sub_title_label)
+        top.addStretch(1)
+        top.addWidget(self.rate_button)
+        top.addWidget(self.rename_sub_btn)
+        top.addWidget(self.delete_sub_btn)
+        top.addStretch(1)
+        top.addWidget(self.export_xlsx_btn)
+        top.addWidget(self.export_pdf_btn)
         layout.addLayout(top)
         self.back_button.clicked.connect(self.go_back); self.rate_button.clicked.connect(self.change_conversion_rate)
         self.rename_sub_btn.clicked.connect(self.rename_subdepartment); self.delete_sub_btn.clicked.connect(self.delete_subdepartment)
@@ -212,10 +237,19 @@ class SubDepartmentDetailWindow(QMainWindow):
         totals.addWidget(self.total_items_lbl); totals.addStretch(1); totals.addWidget(self.total_qty_lbl); totals.addStretch(1)
         totals.addWidget(self.total_usd_lbl); totals.addWidget(self.total_c_lbl); totals.addWidget(self.sum_sub_usd_lbl); totals.addWidget(self.sum_sub_c_lbl)
         layout.addLayout(totals)
-        self.refresh_products()
         self.prod_table.cellDoubleClicked.connect(lambda *_: self.edit_selected_product())
+    
+    def set_subdepartment(self, subdepartment: SubDepartment):
+        self.subdepartment = subdepartment
+        self.sub_title_label.setText(subdepartment.name)
+        self.parent_window.set_page_title(f"{subdepartment.name} - Products")
+        self.refresh_products()
 
     def refresh_products(self):
+        if not self.subdepartment:
+            self.prod_table.setRowCount(0)
+            self.products = []
+            return
         rate = storage.get_conversion_rate(); self.products = storage.list_products(self.subdepartment)
         self.prod_table.setRowCount(0); items = len(self.products); total_qty=0; total_usd=0.0; total_c=0.0
         for p in self.products:
@@ -244,7 +278,9 @@ class SubDepartmentDetailWindow(QMainWindow):
         return next((p for p in self.products if p.prod_id == prod_id), None)
 
     def go_back(self):
-        self.parent_window.refresh_subdepartments(); self.parent_window.show(); self.close()
+        self.subdepartment = None
+        self.products = []
+        self.parent_window.show_subdepartments_page()
 
     def rename_subdepartment(self):
         dlg = EditSubDepartmentNameDialog(self.subdepartment, self)
@@ -253,10 +289,13 @@ class SubDepartmentDetailWindow(QMainWindow):
             if new_name:
                 storage.rename_subdepartment(self.subdepartment, new_name)
                 self.subdepartment.name = new_name
-                self.setWindowTitle(f"{self.subdepartment.name} - Products")
+                self.parent_window.set_page_title(f"{self.subdepartment.name} - Products")
+                self.sub_title_label.setText(self.subdepartment.name)
                 self.parent_window.refresh_subdepartments()
 
     def delete_subdepartment(self):
+        if not self.subdepartment:
+            return
         if storage.count_products(self.subdepartment) > 0:
             QMessageBox.warning(self, "Cannot delete", "This sub department is not empty."); return
         confirm = QMessageBox.question(self, "Delete Sub Department", f"Delete '{self.subdepartment.name}'?",
@@ -272,13 +311,17 @@ class SubDepartmentDetailWindow(QMainWindow):
         from PyQt6.QtWidgets import QInputDialog
         current = storage.get_conversion_rate()
         value, ok = QInputDialog.getDouble(self, "Conversion Rate", "1 USD = ? C$:", float(current), 0.0001, 1_000_000.0, 4)
-        if ok: storage.set_conversion_rate(float(value)); self.refresh_products()
+        if ok:
+            storage.set_conversion_rate(float(value))
+            self.refresh_products()
 
     def show_add_product_form(self):
+        if not self.subdepartment:
+            return
         form = AddProductForm(self); form.exec()
 
     def add_product(self, product: Product):
-        storage.add_product(product); self.refresh_products()
+        storage.add_product(product); self.refresh_products(); self.parent_window.refresh_subdepartments()
 
     def edit_selected_product(self):
         prod = self.current_product()
@@ -299,4 +342,4 @@ class SubDepartmentDetailWindow(QMainWindow):
         confirm = QMessageBox.question(self, "Delete Product", f"Delete product '{prod.name}'?",
                                        QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
         if confirm == QMessageBox.StandardButton.Yes:
-            storage.delete_product(prod); self.refresh_products()
+            storage.delete_product(prod); self.refresh_products(); self.parent_window.refresh_subdepartments()
