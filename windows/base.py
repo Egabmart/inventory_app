@@ -67,6 +67,7 @@ class BaseWindow(QMainWindow):
         storage.init_db()
 
         central = QWidget()
+        central.setObjectName("MainBackground")
         grid = QGridLayout(central)
         grid.setContentsMargins(16, 16, 16, 16)
         grid.setHorizontalSpacing(12)
@@ -147,7 +148,7 @@ class BaseWindow(QMainWindow):
         self.setCentralWidget(central)
         self.setStyleSheet(
             """
-            QWidget { background: #f5f6f8; }
+            QWidget#MainBackground { background: #f5f6f8; }
 
             #TopBar {
                 background: #4ca797;
