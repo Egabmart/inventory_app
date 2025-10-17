@@ -69,11 +69,7 @@ class DepartmentsWindow(BaseWindow):
         sub_top.setSpacing(12)
         self.back_button = QPushButton("Back")
         self.add_sub_button = QPushButton("Add Sub Department")
-        self.sub_title_label = QLabel()
-        self.sub_title_label.setStyleSheet("font-weight: 600; font-size: 18px;")
         sub_top.addWidget(self.back_button)
-        sub_top.addStretch(1)
-        sub_top.addWidget(self.sub_title_label)
         sub_top.addStretch(1)
         sub_top.addWidget(self.add_sub_button)
         sub_layout.addLayout(sub_top)
@@ -154,7 +150,6 @@ class DepartmentsWindow(BaseWindow):
         if not d:
             return
         self.active_department = d
-        self.sub_title_label.setText(d.name)
         self.set_page_title(f"{d.name} - Sub Departments")
         self.refresh_subdepartments()
         self.show_subdepartments_page()
@@ -198,11 +193,7 @@ class SubDepartmentDetailWindow(QWidget):
         self.back_button = QPushButton("Back"); self.rate_button = QPushButton("Conversion rate")
         self.rename_sub_btn = QPushButton("Rename Sub Department"); self.delete_sub_btn = QPushButton("Delete Sub Department")
         self.export_xlsx_btn = QPushButton("Export XLSX"); self.export_pdf_btn = QPushButton("Export PDF")
-        self.sub_title_label = QLabel()
-        self.sub_title_label.setStyleSheet("font-weight: 600; font-size: 18px;")
         top.addWidget(self.back_button)
-        top.addStretch(1)
-        top.addWidget(self.sub_title_label)
         top.addStretch(1)
         top.addWidget(self.rate_button)
         top.addWidget(self.rename_sub_btn)
@@ -241,7 +232,6 @@ class SubDepartmentDetailWindow(QWidget):
     
     def set_subdepartment(self, subdepartment: SubDepartment):
         self.subdepartment = subdepartment
-        self.sub_title_label.setText(subdepartment.name)
         self.parent_window.set_page_title(f"{subdepartment.name} - Products")
         self.refresh_products()
 
@@ -290,7 +280,6 @@ class SubDepartmentDetailWindow(QWidget):
                 storage.rename_subdepartment(self.subdepartment, new_name)
                 self.subdepartment.name = new_name
                 self.parent_window.set_page_title(f"{self.subdepartment.name} - Products")
-                self.sub_title_label.setText(self.subdepartment.name)
                 self.parent_window.refresh_subdepartments()
 
     def delete_subdepartment(self):
