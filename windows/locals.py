@@ -1,7 +1,7 @@
-from PyQt6.QtWidgets import QWidget, QVBoxLayout, QPushButton, QTableWidget, QTableWidgetItem, QHeaderView, QHBoxLayout, QMainWindow, QMessageBox, QInputDialog, QLabel
+from PyQt6.QtWidgets import QWidget, QVBoxLayout, QPushButton, QTableWidget, QTableWidgetItem, QHeaderView, QHBoxLayout, QMessageBox, QInputDialog, QLabel, QStackedWidget
 from PyQt6.QtCore import Qt
 from .base import BaseWindow, export_table_to_xlsx, export_table_to_pdf
-from ..models import Local, Product
+from ..models import Local
 from .. import storage
 
 class LocalsWindow(BaseWindow):
@@ -10,16 +10,28 @@ class LocalsWindow(BaseWindow):
         self.set_page_title("Locals")
         main_layout = self.content_layout
 
+        self.stack = QStackedWidget()
+        main_layout.addWidget(self.stack)
+
+        # --- Locals list page -------------------------------------------------
+        self.list_page = QWidget()
+        list_layout = QVBoxLayout(self.list_page)
+        list_layout.setContentsMargins(0, 0, 0, 0)
+        list_layout.setSpacing(16)
+
         btn_row = QHBoxLayout()
         btn_row.setContentsMargins(0, 0, 0, 0)
         btn_row.setSpacing(12)
         self.add_button = QPushButton("Create Local"); self.delete_button = QPushButton("Delete Local")
         self.export_xlsx_btn = QPushButton("Export XLSX"); self.export_pdf_btn = QPushButton("Export PDF")
-        btn_row.addWidget(self.add_button); btn_row.addWidget(self.delete_button); btn_row.addStretch(1); btn_row.addWidget(self.export_xlsx_btn); btn_row.addWidget(self.export_pdf_btn)
+        btn_row.addWidget(self.add_button); btn_row.addWidget(self.delete_button)
+        btn_row.addStretch(1); btn_row.addWidget(self.export_xlsx_btn); btn_row.addWidget(self.export_pdf_btn)
+        list_layout.addLayout(btn_row)
         main_layout.insertLayout(1, btn_row)
         self.add_button.clicked.connect(self.show_add_form); self.delete_button.clicked.connect(self.delete_selected_local)
         self.export_xlsx_btn.clicked.connect(lambda: export_table_to_xlsx(self.table, self))
         self.export_pdf_btn.clicked.connect(lambda: export_table_to_pdf(self.table, self))
+
         self.table = QTableWidget(0, 2)
         self.table.setHorizontalHeaderLabels(["Name", "Number of items"])
         self.table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
@@ -27,8 +39,62 @@ class LocalsWindow(BaseWindow):
         self.table.setSelectionMode(QTableWidget.SelectionMode.SingleSelection)
         self.table.verticalHeader().setVisible(False)
         header = self.table.horizontalHeader(); header.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch); header.setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
-        main_layout.addWidget(self.table)
-        storage.init_db(); self.refresh_locals()
+        list_layout.addWidget(self.table)
+
+        self.stack.addWidget(self.list_page)
+
+        # --- Local detail page ------------------------------------------------
+        self.detail_page = QWidget()
+        detail_layout = QVBoxLayout(self.detail_page)
+        detail_layout.setContentsMargins(0, 0, 0, 0)
+        detail_layout.setSpacing(16)
+
+        top = QHBoxLayout()
+        top.setContentsMargins(0, 0, 0, 0)
+        top.setSpacing(12)
+        self.back_btn = QPushButton("Back"); self.retail_btn = QPushButton("Retail Rate")
+        top.addWidget(self.back_btn); top.addStretch(1); top.addWidget(self.retail_btn)
+        detail_layout.addLayout(top)
+
+        self.back_btn.clicked.connect(self.show_locals_page); self.retail_btn.clicked.connect(self.change_retail_rate)
+
+        actions = QHBoxLayout()
+        actions.setContentsMargins(0, 0, 0, 0)
+        actions.setSpacing(12)
+        self.remove_btn = QPushButton("Remove Product from Local")
+        actions.addWidget(self.remove_btn); actions.addStretch(1)
+        detail_layout.addLayout(actions)
+
+        self.remove_btn.clicked.connect(self.remove_selected_product)
+
+        self.prod_table = QTableWidget(0, 7)
+        self.prod_table.setHorizontalHeaderLabels(["Id", "Name", "Price $", "Price C$", "Quantity", "Subtotal $", "Subtotal C$"])
+        self.prod_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        self.prod_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
+        self.prod_table.setSelectionMode(QTableWidget.SelectionMode.SingleSelection)
+        self.prod_table.verticalHeader().setVisible(False)
+        header = self.prod_table.horizontalHeader()
+        header.setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents); header.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
+        for i in range(2,7): header.setSectionResizeMode(i, QHeaderView.ResizeMode.ResizeToContents)
+        detail_layout.addWidget(self.prod_table)
+
+        totals = QHBoxLayout()
+        totals.setContentsMargins(0, 0, 0, 0)
+        totals.setSpacing(12)
+        self.total_items_lbl = QLabel("Items: 0"); self.total_qty_lbl = QLabel("Total quantity: 0")
+        self.total_usd_lbl = QLabel("Total price $: 0.00"); self.total_c_lbl = QLabel("Total price C$: 0.00")
+        self.sum_sub_usd_lbl = QLabel("Subtotal $ (sum): 0.00"); self.sum_sub_c_lbl = QLabel("Subtotal C$ (sum): 0.00")
+        totals.addWidget(self.total_items_lbl); totals.addStretch(1); totals.addWidget(self.total_qty_lbl); totals.addStretch(1)
+        totals.addWidget(self.total_usd_lbl); totals.addWidget(self.total_c_lbl); totals.addWidget(self.sum_sub_usd_lbl); totals.addWidget(self.sum_sub_c_lbl)
+        detail_layout.addLayout(totals)
+
+        self.stack.addWidget(self.detail_page)
+
+        storage.init_db()
+        self.active_local: Local | None = None
+        self.products: list = []
+        self.refresh_locals()
+        self.stack.setCurrentWidget(self.list_page)
         self.table.cellDoubleClicked.connect(self.open_local_detail)
 
     def refresh_locals(self):
@@ -46,7 +112,12 @@ class LocalsWindow(BaseWindow):
     def open_local_detail(self, row: int, _col: int):
         local_id = self.table.item(row, 0).data(Qt.ItemDataRole.UserRole)
         loc = next((l for l in self.locals if l.local_id == local_id), None)
-        if loc: self.detail = LocalDetailWindow(loc, self); self.detail.show(); self.hide()
+        if not loc:
+            return
+        self.active_local = loc
+        self.set_page_title(f"{loc.name} - Products")
+        self.refresh_products()
+        self.stack.setCurrentWidget(self.detail_page)
 
     def current_local(self):
         row = self.table.currentRow()
@@ -61,39 +132,23 @@ class LocalsWindow(BaseWindow):
         if confirm == QMessageBox.StandardButton.Yes:
             storage.delete_local(loc); self.refresh_locals()
 
-class LocalDetailWindow(QMainWindow):
-    def __init__(self, local: Local, parent_window: LocalsWindow):
-        super().__init__(); self.local = local; self.parent_window = parent_window
-        self.setWindowTitle(f"{local.name} - Products"); self.resize(1000, 620)
-        central = QWidget(); layout = QVBoxLayout(central); self.setCentralWidget(central)
-        top = QHBoxLayout()
-        self.back_btn = QPushButton("Back"); self.retail_btn = QPushButton("Retail Rate")
-        top.addWidget(self.back_btn); top.addStretch(1); top.addWidget(self.retail_btn); layout.addLayout(top)
-        self.back_btn.clicked.connect(self.go_back); self.retail_btn.clicked.connect(self.change_retail_rate)
-        actions = QHBoxLayout(); self.remove_btn = QPushButton("Remove Product from Local"); actions.addWidget(self.remove_btn); actions.addStretch(1); layout.addLayout(actions)
-        self.remove_btn.clicked.connect(self.remove_selected_product)
-        self.prod_table = QTableWidget(0, 7)
-        self.prod_table.setHorizontalHeaderLabels(["Id", "Name", "Price $", "Price C$", "Quantity", "Subtotal $", "Subtotal C$"])
-        self.prod_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
-        self.prod_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
-        self.prod_table.setSelectionMode(QTableWidget.SelectionMode.SingleSelection)
-        self.prod_table.verticalHeader().setVisible(False)
-        header = self.prod_table.horizontalHeader()
-        header.setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents); header.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
-        for i in range(2,7): header.setSectionResizeMode(i, QHeaderView.ResizeMode.ResizeToContents)
-        layout.addWidget(self.prod_table)
-        totals = QHBoxLayout()
-        self.total_items_lbl = QLabel("Items: 0"); self.total_qty_lbl = QLabel("Total quantity: 0")
-        self.total_usd_lbl = QLabel("Total price $: 0.00"); self.total_c_lbl = QLabel("Total price C$: 0.00")
-        self.sum_sub_usd_lbl = QLabel("Subtotal $ (sum): 0.00"); self.sum_sub_c_lbl = QLabel("Subtotal C$ (sum): 0.00")
-        totals.addWidget(self.total_items_lbl); totals.addStretch(1); totals.addWidget(self.total_qty_lbl); totals.addStretch(1)
-        totals.addWidget(self.total_usd_lbl); totals.addWidget(self.total_c_lbl); totals.addWidget(self.sum_sub_usd_lbl); totals.addWidget(self.sum_sub_c_lbl)
-        layout.addLayout(totals)
-        self.refresh_products()
+    def show_locals_page(self):
+        self.active_local = None
+        self.set_page_title("Locals")
+        self.refresh_locals()
+        self.stack.setCurrentWidget(self.list_page)
 
     def refresh_products(self):
-        conv = storage.get_conversion_rate(); retail_pct = storage.get_local_retail_rate(self.local)
-        self.products = storage.list_products_for_local(self.local)
+        if not self.active_local:
+            self.products = []
+            self.prod_table.setRowCount(0)
+            self.total_items_lbl.setText("Items: 0"); self.total_qty_lbl.setText("Total quantity: 0")
+            self.total_usd_lbl.setText("Total price $: 0.00"); self.total_c_lbl.setText("Total price C$: 0.00")
+            self.sum_sub_usd_lbl.setText("Subtotal $ (sum): 0.00"); self.sum_sub_c_lbl.setText("Subtotal C$ (sum): 0.00")
+            return
+        conv = storage.get_conversion_rate(); retail_pct = storage.get_local_retail_rate(self.active_local)
+        self.products = storage.list_products_for_local(self.active_local)
+       
         self.prod_table.setRowCount(0); items = len(self.products); total_qty=0; total_usd=0.0; total_c=0.0
         for p in self.products:
             row = self.prod_table.rowCount(); self.prod_table.insertRow(row)
@@ -114,8 +169,10 @@ class LocalDetailWindow(QMainWindow):
         self.total_usd_lbl.setText(f"Total price $: {total_usd:.2f}"); self.total_c_lbl.setText(f"Total price C$: {total_c:.2f}")
         self.sum_sub_usd_lbl.setText(f"Subtotal $ (sum): {total_usd:.2f}"); self.sum_sub_c_lbl.setText(f"Subtotal C$ (sum): {total_c:.2f}")
         try:
-            pct = float(storage.get_local_retail_rate(self.local)); self.setWindowTitle(f"{self.local.name} - Products (Retail {pct:.2f}%)")
-        except Exception: pass
+            pct = float(storage.get_local_retail_rate(self.active_local))
+            self.set_page_title(f"{self.active_local.name} - Products (Retail {pct:.2f}%)")
+        except Exception:
+            self.set_page_title(f"{self.active_local.name} - Products")
 
     def current_product(self):
         row = self.prod_table.currentRow()
@@ -124,16 +181,18 @@ class LocalDetailWindow(QMainWindow):
         return next((p for p in self.products if p.prod_id == prod_id), None)
 
     def remove_selected_product(self):
+        if not self.active_local:
+            return
         prod = self.current_product()
         if not prod: return
-        confirm = QMessageBox.question(self, "Remove Product", f"Remove '{prod.name}' from local '{self.local.name}'?", QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+        confirm = QMessageBox.question(self, "Remove Product", f"Remove '{prod.name}' from local '{self.active_local.name}'?", QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
         if confirm == QMessageBox.StandardButton.Yes:
-            storage.remove_product_from_local(self.local, prod); self.refresh_products(); self.parent_window.refresh_locals()
+            storage.remove_product_from_local(self.active_local, prod); self.refresh_products(); self.refresh_locals()
 
     def change_retail_rate(self):
-        current = storage.get_local_retail_rate(self.local)
+        if not self.active_local:
+            return
+        current = storage.get_local_retail_rate(self.active_local)
         value, ok = QInputDialog.getDouble(self, "Retail Rate", "Add-on percentage (%)\n(e.g., 10 = +10%)", float(current), -1000.0, 1000.0, 2)
-        if ok: storage.set_local_retail_rate(self.local, float(value)); self.refresh_products()
-
-    def go_back(self):
-        self.parent_window.refresh_locals(); self.parent_window.show(); self.close()
+        if ok:
+            storage.set_local_retail_rate(self.active_local, float(value)); self.refresh_products()
