@@ -16,6 +16,12 @@ def get_conn():
         raise
     return conn
 
+def _delete_media_for_products(prod_ids: list[str]) -> None:
+    for pid in prod_ids:
+        media_dir = _MEDIA_ROOT / pid
+        if media_dir.exists() and media_dir.is_dir():
+            shutil.rmtree(media_dir, ignore_errors=True)
+
 def init_db():
     conn = get_conn(); cur = conn.cursor()
     cur.execute("""CREATE TABLE IF NOT EXISTS departments(
@@ -124,6 +130,12 @@ def list_departments():
     conn = get_conn(); rows = conn.execute("SELECT dept_id, abbreviation, name FROM departments ORDER BY name").fetchall()
     conn.close(); return [Department(*r) for r in rows]
 
+def get_department_by_id(dept_id: int) -> Department | None:
+    conn = get_conn()
+    row = conn.execute("SELECT dept_id, abbreviation, name FROM departments WHERE dept_id=?", (dept_id,)).fetchone()
+    conn.close()
+    return Department(*row) if row else None
+
 def add_department(abbrev: str, name: str) -> Department:
     conn = get_conn(); cur = conn.cursor()
     cur.execute("INSERT INTO departments(abbreviation,name) VALUES(?,?)", (abbrev, name))
@@ -140,10 +152,45 @@ def delete_department_if_empty(dept: Department) -> bool:
         conn.execute("DELETE FROM departments WHERE dept_id=?", (dept.dept_id,)); conn.commit(); conn.close(); return True
     conn.close(); return False
 
+def delete_department(dept: Department) -> None:
+    conn = get_conn()
+    prod_rows = conn.execute(
+        """
+        SELECT p.prod_id
+        FROM products p
+        JOIN subdepartments s ON s.sub_id = p.parent_sub_id
+        WHERE s.parent_dept_id = ?
+        """,
+        (dept.dept_id,),
+    ).fetchall()
+    prod_ids = [row[0] for row in prod_rows]
+    conn.execute("DELETE FROM departments WHERE dept_id=?", (dept.dept_id,))
+    conn.commit(); conn.close()
+    if prod_ids:
+        _delete_media_for_products(prod_ids)
+
 def list_subdepartments(dept: Department):
     conn = get_conn()
     rows = conn.execute("""SELECT sub_id, abbreviation, name FROM subdepartments WHERE parent_dept_id=? ORDER BY name""", (dept.dept_id,)).fetchall()
     conn.close(); return [SubDepartment(r[0], dept, r[1], r[2]) for r in rows]
+
+def get_subdepartment_by_id(sub_id: int) -> SubDepartment | None:
+    conn = get_conn()
+    row = conn.execute(
+        """
+        SELECT s.sub_id, s.parent_dept_id, s.abbreviation, s.name,
+               d.dept_id, d.abbreviation, d.name
+        FROM subdepartments s
+        JOIN departments d ON d.dept_id = s.parent_dept_id
+        WHERE s.sub_id = ?
+        """,
+        (sub_id,),
+    ).fetchone()
+    conn.close()
+    if not row:
+        return None
+    dept = Department(row[4], row[5], row[6])
+    return SubDepartment(row[0], dept, row[2], row[3])
 
 def add_subdepartment(dept: Department, abbrev: str, name: str) -> SubDepartment:
     conn = get_conn(); cur = conn.cursor()
@@ -159,6 +206,14 @@ def delete_subdepartment_if_empty(sub: SubDepartment) -> bool:
     if row and row[0]==0:
         conn.execute("DELETE FROM subdepartments WHERE sub_id=?", (sub.sub_id,)); conn.commit(); conn.close(); return True
     conn.close(); return False
+
+def delete_subdepartment(sub: SubDepartment) -> None:
+    conn = get_conn(); prod_rows = conn.execute("SELECT prod_id FROM products WHERE parent_sub_id=?", (sub.sub_id,)).fetchall()
+    prod_ids = [row[0] for row in prod_rows]
+    conn.execute("DELETE FROM subdepartments WHERE sub_id=?", (sub.sub_id,))
+    conn.commit(); conn.close()
+    if prod_ids:
+        _delete_media_for_products(prod_ids)
 
 def list_products(sub: SubDepartment):
     conn = get_conn()
@@ -223,12 +278,23 @@ def generate_next_product_id(sub: SubDepartment) -> str:
             ).fetchone()
             if not exists:
                 raise ValueError("Subdepartment not found")
-        count_row = conn.execute(
-            "SELECT COUNT(*) FROM products WHERE parent_sub_id=?",
+        prefix = f"{d_abbr}{s_abbr}"
+        existing_rows = conn.execute(
+            "SELECT prod_id FROM products WHERE parent_sub_id=?",
             (sub.sub_id,),
-        ).fetchone()
-        order = int(count_row[0]) + 1 if count_row else 1
-        return f"{d_abbr}{s_abbr}{order}"
+        ).fetchall()
+        highest = 0
+        for (prod_id,) in existing_rows:
+            if not isinstance(prod_id, str):
+                continue
+            if not prod_id.startswith(prefix):
+                continue
+            suffix = prod_id[len(prefix):]
+            if not suffix:
+                continue
+            if suffix.isdigit():
+                highest = max(highest, int(suffix))
+        return f"{prefix}{highest + 1}"
     finally:
         conn.close()
 

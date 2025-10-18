@@ -127,7 +127,22 @@ class DepartmentsWindow(BaseWindow):
         d = self.current_department()
         if not d: return
         if not storage.delete_department_if_empty(d):
-            QMessageBox.warning(self, "Cannot delete", "This department is not empty."); return
+            confirm = QMessageBox.question(
+                self,
+                "Delete Department",
+                f"'{d.name}' still has sub departments or products. Delete everything?",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            )
+            if confirm != QMessageBox.StandardButton.Yes:
+                return
+            storage.delete_department(d)
+            QMessageBox.information(self, "Deleted", "Department and all of its data deleted.")
+            if self.active_department and self.active_department.dept_id == d.dept_id:
+                self.active_department = None
+            self.refresh_departments(); self.stack.setCurrentWidget(self.dept_page)
+            return
+        if self.active_department and self.active_department.dept_id == d.dept_id:
+            self.active_department = None
         self.refresh_departments()
 
     def show_departments_page(self):
@@ -285,16 +300,33 @@ class SubDepartmentDetailWindow(QWidget):
     def delete_subdepartment(self):
         if not self.subdepartment:
             return
-        if storage.count_products(self.subdepartment) > 0:
-            QMessageBox.warning(self, "Cannot delete", "This sub department is not empty."); return
-        confirm = QMessageBox.question(self, "Delete Sub Department", f"Delete '{self.subdepartment.name}'?",
-                                       QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
-        if confirm == QMessageBox.StandardButton.Yes:
-            ok = storage.delete_subdepartment_if_empty(self.subdepartment)
-            if ok:
-                QMessageBox.information(self, "Deleted", "Sub department deleted."); self.go_back()
-            else:
-                QMessageBox.warning(self, "Cannot delete", "This sub department is not empty.")
+        prod_count = storage.count_products(self.subdepartment)
+        if prod_count > 0:
+            question = QMessageBox.question(
+                self,
+                "Delete Sub Department",
+                f"'{self.subdepartment.name}' has {prod_count} product(s). Delete everything?",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            )
+            if question != QMessageBox.StandardButton.Yes:
+                return
+            storage.delete_subdepartment(self.subdepartment)
+            QMessageBox.information(self, "Deleted", "Sub department and its products deleted.")
+            self.parent_window.refresh_subdepartments(); self.parent_window.refresh_departments()
+            self.go_back()
+            return
+        confirm = QMessageBox.question(
+            self,
+            "Delete Sub Department",
+            f"Delete '{self.subdepartment.name}'?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+        )
+        if confirm != QMessageBox.StandardButton.Yes:
+            return
+        storage.delete_subdepartment(self.subdepartment)
+        QMessageBox.information(self, "Deleted", "Sub department deleted.")
+        self.parent_window.refresh_subdepartments(); self.parent_window.refresh_departments()
+        self.go_back()
 
     def change_conversion_rate(self):
         from PyQt6.QtWidgets import QInputDialog

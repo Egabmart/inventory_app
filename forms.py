@@ -4,6 +4,7 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtGui import QPixmap, QIntValidator
+from sqlite3 import IntegrityError
 from .models import Product, SubDepartment, Local
 from . import storage
 from pathlib import Path
@@ -70,7 +71,12 @@ class AddDepartmentForm(QDialog):
     def create_department(self):
         name = self.input_name.text().strip(); ab = self.input_abbrev.text().strip()
         if not name or not ab: return
-        storage.add_department(ab, name); self.parent.refresh_departments(); self.close()
+        try:
+            storage.add_department(ab, name)
+        except IntegrityError:
+            QMessageBox.warning(self, "Duplicate", "A department with this abbreviation already exists.")
+            return
+        self.parent.refresh_departments(); self.close()
 
 class AddSubDepartmentForm(QDialog):
     def __init__(self, department, parent=None):
@@ -82,7 +88,21 @@ class AddSubDepartmentForm(QDialog):
     def create_subdepartment(self):
         name = self.input_name.text().strip(); ab = self.input_abbrev.text().strip()
         if not name or not ab: return
-        storage.add_subdepartment(self.department, ab, name); self.parent.refresh_subdepartments(); self.close()
+        dept = storage.get_department_by_id(self.department.dept_id) if hasattr(self.department, "dept_id") else None
+        if not dept:
+            QMessageBox.warning(self, "Missing department", "The selected department could not be found. Please refresh and try again.")
+            return
+        try:
+            storage.add_subdepartment(dept, ab, name)
+        except IntegrityError:
+            QMessageBox.warning(self, "Duplicate", "A sub department with this abbreviation already exists for this department.")
+            return
+        self.parent.refresh_subdepartments();
+        try:
+            self.parent.refresh_departments()
+        except AttributeError:
+            pass
+        self.close()
 
 class AddProductForm(QDialog):
     def __init__(self, parent=None):
@@ -110,14 +130,23 @@ class AddProductForm(QDialog):
         if not sub:
             QMessageBox.warning(self, "Missing sub department", "Please select a sub department before adding a product.")
             return
+        stored_sub = storage.get_subdepartment_by_id(getattr(sub, "sub_id", -1)) if hasattr(sub, "sub_id") else None
+        if not stored_sub:
+            QMessageBox.warning(self, "Missing sub department", "The selected sub department could not be found in storage.")
+            return
         try:
-            prod_id = storage.generate_next_product_id(sub)
+            prod_id = storage.generate_next_product_id(stored_sub)
         except ValueError:
             QMessageBox.warning(self, "Missing sub department", "The selected sub department could not be found in storage.")
             return
-        try: product = Product(prod_id, sub, name, desc, float(price), int(qty))
+        try: product = Product(prod_id, stored_sub, name, desc, float(price), int(qty))
         except ValueError: return
-        self.parent.add_product(product)
+        self.parent.subdepartment = stored_sub
+        try:
+            self.parent.add_product(product)
+        except IntegrityError:
+            QMessageBox.warning(self, "Duplicate", "A product with the generated ID already exists. Please try again.")
+            return
         try: storage.add_product_images(product, self._image_paths)
         except Exception: pass
         self.close()
