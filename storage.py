@@ -1,4 +1,5 @@
 import sqlite3, os, uuid, shutil, mimetypes
+from datetime import date
 from pathlib import Path
 from typing import Optional
 from .models import Department, SubDepartment, Product, Local
@@ -89,10 +90,17 @@ def init_db():
         qty INTEGER NOT NULL,
         location_type TEXT NOT NULL,
         local_id INTEGER,
+        client TEXT,
+        sold_on TEXT NOT NULL DEFAULT (DATE('now')),
         sold_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY(prod_id) REFERENCES products(prod_id) ON DELETE CASCADE,
         FOREIGN KEY(local_id) REFERENCES locals(local_id) ON DELETE SET NULL
     )""" )
+    sold_cols = {row[1] for row in cur.execute("PRAGMA table_info(sold_products)")}
+    if "client" not in sold_cols:
+        cur.execute("ALTER TABLE sold_products ADD COLUMN client TEXT")
+    if "sold_on" not in sold_cols:
+        cur.execute("ALTER TABLE sold_products ADD COLUMN sold_on TEXT NOT NULL DEFAULT (DATE('now'))")
     conn.commit(); conn.close()
 
 def _get_setting(key: str) -> Optional[str]:
@@ -434,7 +442,14 @@ def search_products(term: str) -> list[Product]:
         results.append(Product(row[0], sub, row[2], row[3], float(row[4]), int(row[5])))
     return results
 
-def register_sale(prod: Product, qty: int, location_type: str, local: Local|None) -> bool:
+def register_sale(
+    prod: Product,
+    qty: int,
+    location_type: str,
+    local: Local | None,
+    client: Optional[str] = None,
+    sold_on: Optional[str] = None,
+) -> bool:
     total = get_product_total_quantity(prod)
     if qty <= 0 or qty > total: return False
     conn = get_conn(); cur = conn.cursor()
@@ -446,6 +461,18 @@ def register_sale(prod: Product, qty: int, location_type: str, local: Local|None
             conn.rollback(); conn.close(); return False
         cur.execute("UPDATE local_products SET quantity = quantity - ? WHERE local_id=? AND prod_id=?", (qty, local.local_id, prod.prod_id))
         cur.execute("DELETE FROM local_products WHERE local_id=? AND prod_id=? AND quantity <= 0", (local.local_id, prod.prod_id))
-    cur.execute("""INSERT INTO sold_products(sale_id, prod_id, qty, location_type, local_id)
-                  VALUES(?,?,?,?,?)""", (uuid.uuid4().hex, prod.prod_id, qty, location_type, local.local_id if local else None))
+    sale_date = sold_on or date.today().isoformat()
+    cur.execute(
+        """INSERT INTO sold_products(sale_id, prod_id, qty, location_type, local_id, client, sold_on)
+                  VALUES(?,?,?,?,?,?,?)""",
+        (
+            uuid.uuid4().hex,
+            prod.prod_id,
+            qty,
+            location_type,
+            local.local_id if local else None,
+            client,
+            sale_date,
+        ),
+    )
     conn.commit(); conn.close(); return True

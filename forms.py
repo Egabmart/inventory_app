@@ -1,8 +1,9 @@
 from PyQt6.QtWidgets import (
     QDialog, QFormLayout, QLineEdit, QPushButton, QHBoxLayout, QPlainTextEdit,
-    QFileDialog, QFrame, QLabel, QVBoxLayout, QScrollArea, QWidget, QComboBox, QMessageBox
+    QFileDialog, QFrame, QLabel, QVBoxLayout, QScrollArea, QWidget, QComboBox, QMessageBox,
+    QDateEdit,
 )
-from PyQt6.QtCore import Qt, pyqtSignal
+from PyQt6.QtCore import Qt, pyqtSignal, QDate
 from PyQt6.QtGui import QPixmap, QIntValidator
 from sqlite3 import IntegrityError
 from .models import Department, Product, SubDepartment, Local
@@ -202,12 +203,15 @@ class LocalPickerDialog(QDialog):
 
 class RegisterSaleDialog(QDialog):
     def __init__(self, parent=None):
-        super().__init__(parent); self.setWindowTitle("Register Sale"); self.setFixedSize(380,220)
+        super().__init__(parent); self.setWindowTitle("Register Sale"); self.setFixedSize(420,260)
         form = QFormLayout(self); self.input_code = QLineEdit(); self.input_code.setPlaceholderText("e.g., COVE1")
         self.input_qty = QLineEdit(); self.input_qty.setValidator(QIntValidator(1, 1_000_000, self)); self.loc_combo = QComboBox()
         self.loc_combo.addItem("Online", {"type":"online", "id": None})
         for loc in storage.list_locals(): self.loc_combo.addItem(loc.name, {"type":"local", "id": loc.local_id})
+        self.input_client = QLineEdit(); self.input_client.setPlaceholderText("Optional")
+        self.date_edit = QDateEdit(); self.date_edit.setCalendarPopup(True); self.date_edit.setDisplayFormat("yyyy-MM-dd"); self.date_edit.setDate(QDate.currentDate())
         form.addRow("Product ID:", self.input_code); form.addRow("Quantity:", self.input_qty); form.addRow("Location:", self.loc_combo)
+        form.addRow("Client:", self.input_client); form.addRow("Sale date:", self.date_edit)
         row = QHBoxLayout(); self.ok_btn = QPushButton("Register"); self.cancel_btn = QPushButton("Cancel")
         row.addStretch(1); row.addWidget(self.ok_btn); row.addWidget(self.cancel_btn); form.addRow(row)
         self.ok_btn.clicked.connect(self.register); self.cancel_btn.clicked.connect(self.reject)
@@ -222,7 +226,9 @@ class RegisterSaleDialog(QDialog):
         if data["type"] == "local":
             for l in storage.list_locals():
                 if l.local_id == data["id"]: loc = l; break
-        ok = storage.register_sale(prod, qty, data["type"], loc)
+        client = self.input_client.text().strip()
+        sale_date = self.date_edit.date().toString("yyyy-MM-dd")
+        ok = storage.register_sale(prod, qty, data["type"], loc, client if client else None, sale_date)
         if not ok:
             QMessageBox.warning(self, "Not enough quantity", "Requested quantity is not available (or not allocated in the chosen local).")
             return
