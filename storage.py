@@ -401,6 +401,39 @@ def get_product_by_id(prod_code: str):
     prod = Product(row[0], sub, row[2], row[3], float(row[4]), int(row[5]))
     conn.close(); return prod
 
+def search_products(term: str) -> list[Product]:
+    conn = get_conn()
+    like_term = f"%{term}%"
+    rows = conn.execute(
+        """
+        SELECT p.prod_id, p.parent_sub_id, p.name, p.description, p.price, p.quantity,
+               s.sub_id, s.parent_dept_id, s.abbreviation, s.name,
+               d.dept_id, d.abbreviation, d.name
+        FROM products p
+        JOIN subdepartments s ON s.sub_id = p.parent_sub_id
+        JOIN departments d ON d.dept_id = s.parent_dept_id
+        WHERE UPPER(p.prod_id) LIKE UPPER(?) OR UPPER(p.name) LIKE UPPER(?)
+        ORDER BY
+            CASE
+                WHEN UPPER(p.prod_id) = UPPER(?) THEN 0
+                WHEN UPPER(p.name) = UPPER(?) THEN 1
+                WHEN UPPER(p.prod_id) LIKE UPPER(?) THEN 2
+                WHEN UPPER(p.name) LIKE UPPER(?) THEN 3
+                ELSE 4
+            END,
+            p.prod_id
+        """,
+        (like_term, like_term, term, term, like_term, like_term),
+    ).fetchall()
+    conn.close()
+
+    results: list[Product] = []
+    for row in rows:
+        dept = Department(row[10], row[11], row[12])
+        sub = SubDepartment(row[6], dept, row[8], row[9])
+        results.append(Product(row[0], sub, row[2], row[3], float(row[4]), int(row[5])))
+    return results
+
 def register_sale(prod: Product, qty: int, location_type: str, local: Local|None) -> bool:
     total = get_product_total_quantity(prod)
     if qty <= 0 or qty > total: return False
