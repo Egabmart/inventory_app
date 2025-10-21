@@ -448,9 +448,20 @@ def list_sold_products() -> list[dict]:
     conn = get_conn()
     rows = conn.execute(
         """
-        SELECT s.sale_id, s.prod_id, s.qty, s.sold_on, s.sold_at, p.name, p.price
+        SELECT
+            s.sale_id,
+            s.prod_id,
+            s.qty,
+            s.sold_on,
+            s.sold_at,
+            s.location_type,
+            s.local_id,
+            p.name,
+            p.price,
+            l.name as local_name
         FROM sold_products s
         JOIN products p ON p.prod_id = s.prod_id
+        LEFT JOIN locals l ON l.local_id = s.local_id
         ORDER BY datetime(s.sold_at) DESC, s.sale_id DESC
         """
     ).fetchall()
@@ -463,8 +474,11 @@ def list_sold_products() -> list[dict]:
             "qty": int(row[2]),
             "sold_on": row[3],
             "sold_at": row[4],
-            "name": row[5],
-            "price": float(row[6]),
+            "location_type": row[5],
+            "local_id": row[6],
+            "name": row[7],
+            "price": float(row[8]),
+            "local_name": row[9],
         }
         for row in rows
     ]

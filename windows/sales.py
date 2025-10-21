@@ -30,9 +30,9 @@ class SalesWindow(BaseWindow):
 
         main_layout.insertLayout(1, actions)
 
-        self.sales_table = QTableWidget(0, 6)
+        self.sales_table = QTableWidget(0, 7)
         self.sales_table.setHorizontalHeaderLabels(
-            ["Date", "Id", "Name", "Qty", "$ Price", "C$ Price"]
+            ["Date", "Id", "Name", "Location", "Qty", "$ Price", "C$ Price"]
         )
         self.sales_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self.sales_table.setSelectionBehavior(
@@ -50,6 +50,7 @@ class SalesWindow(BaseWindow):
         header.setSectionResizeMode(3, QHeaderView.ResizeMode.ResizeToContents)
         header.setSectionResizeMode(4, QHeaderView.ResizeMode.ResizeToContents)
         header.setSectionResizeMode(5, QHeaderView.ResizeMode.ResizeToContents)
+        header.setSectionResizeMode(6, QHeaderView.ResizeMode.ResizeToContents)
 
         main_layout.addWidget(self.sales_table)
 
@@ -80,9 +81,12 @@ class SalesWindow(BaseWindow):
             id_item.setData(Qt.ItemDataRole.UserRole, sale["sale_id"])
             name_item = QTableWidgetItem(sale["name"])
 
+            location = self._format_location(sale)
             qty = int(sale["qty"])
             price_usd = float(sale["price"])
             price_cad = price_usd * rate
+
+            location_item = QTableWidgetItem(location)
 
             qty_item = QTableWidgetItem(str(qty))
             qty_item.setTextAlignment(
@@ -102,6 +106,16 @@ class SalesWindow(BaseWindow):
             self.sales_table.setItem(row, 0, date_item)
             self.sales_table.setItem(row, 1, id_item)
             self.sales_table.setItem(row, 2, name_item)
-            self.sales_table.setItem(row, 3, qty_item)
-            self.sales_table.setItem(row, 4, usd_item)
-            self.sales_table.setItem(row, 5, cad_item)
+            self.sales_table.setItem(row, 3, location_item)
+            self.sales_table.setItem(row, 4, qty_item)
+            self.sales_table.setItem(row, 5, usd_item)
+            self.sales_table.setItem(row, 6, cad_item)
+
+    def _format_location(self, sale: dict) -> str:
+        location_type = (sale.get("location_type") or "").strip().lower()
+        if location_type == "local":
+            local_name = sale.get("local_name") or "Local"
+            return local_name
+        if location_type == "online":
+            return "Online"
+        return location_type.capitalize() if location_type else ""
