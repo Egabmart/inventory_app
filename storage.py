@@ -442,6 +442,33 @@ def search_products(term: str) -> list[Product]:
         results.append(Product(row[0], sub, row[2], row[3], float(row[4]), int(row[5])))
     return results
 
+def list_sold_products() -> list[dict]:
+    """Return sold products sorted from most recent to oldest."""
+
+    conn = get_conn()
+    rows = conn.execute(
+        """
+        SELECT s.sale_id, s.prod_id, s.qty, s.sold_on, s.sold_at, p.name, p.price
+        FROM sold_products s
+        JOIN products p ON p.prod_id = s.prod_id
+        ORDER BY datetime(s.sold_at) DESC, s.sale_id DESC
+        """
+    ).fetchall()
+    conn.close()
+
+    return [
+        {
+            "sale_id": row[0],
+            "prod_id": row[1],
+            "qty": int(row[2]),
+            "sold_on": row[3],
+            "sold_at": row[4],
+            "name": row[5],
+            "price": float(row[6]),
+        }
+        for row in rows
+    ]
+
 def register_sale(
     prod: Product,
     qty: int,
