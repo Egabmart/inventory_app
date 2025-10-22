@@ -12,6 +12,7 @@ from PyQt6.QtWidgets import (
 from .base import BaseWindow
 from .. import storage
 from ..forms import RegisterSaleDialog
+from ..forms import CreateInvoiceDialog, RegisterSaleDialog
 
 class SaleDetailsDialog(QDialog):
     def __init__(self, sale: dict, parent=None) -> None:
@@ -80,6 +81,9 @@ class SalesWindow(BaseWindow):
 
         self.register_button = QPushButton("Register sales")
         actions.addWidget(self.register_button)
+        
+        self.create_invoice_button = QPushButton("Create Invoice")
+        actions.addWidget(self.create_invoice_button)
         actions.addStretch(1)
 
         main_layout.insertLayout(1, actions)
@@ -109,6 +113,7 @@ class SalesWindow(BaseWindow):
         main_layout.addWidget(self.sales_table)
 
         self.register_button.clicked.connect(self.open_register_sales_dialog)
+        self.create_invoice_button.clicked.connect(self.open_create_invoice_dialog)
         self.sales_table.cellClicked.connect(self._open_sale_details)
         self.refresh_sales_table()
 
@@ -116,6 +121,10 @@ class SalesWindow(BaseWindow):
         dialog = RegisterSaleDialog(self)
         if dialog.exec() == QDialog.DialogCode.Accepted:
             self.refresh_sales_table()
+
+    def open_create_invoice_dialog(self) -> None:
+        dialog = CreateInvoiceDialog(self)
+        dialog.exec()
 
     def showEvent(self, event) -> None:  # type: ignore[override]
         super().showEvent(event)

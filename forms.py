@@ -1,10 +1,13 @@
+import base64
+from html import escape
 from PyQt6.QtWidgets import (
     QDialog, QFormLayout, QLineEdit, QPushButton, QHBoxLayout, QPlainTextEdit,
     QFileDialog, QFrame, QLabel, QVBoxLayout, QScrollArea, QWidget, QComboBox, QMessageBox,
     QDateEdit,
 )
-from PyQt6.QtCore import Qt, pyqtSignal, QDate
-from PyQt6.QtGui import QPixmap, QIntValidator
+from PyQt6.QtCore import Qt, pyqtSignal, QDate, QMarginsF
+from PyQt6.QtGui import QPixmap, QIntValidator, QTextDocument, QPageLayout
+from PyQt6.QtPrintSupport import QPrinter
 from sqlite3 import IntegrityError
 from .models import Department, Product, SubDepartment, Local
 from . import storage
@@ -233,6 +236,319 @@ class RegisterSaleDialog(QDialog):
             QMessageBox.warning(self, "Not enough quantity", "Requested quantity is not available (or not allocated in the chosen local).")
             return
         QMessageBox.information(self, "Sale registered", "Sale recorded successfully."); self.accept()
+
+
+class CreateInvoiceDialog(QDialog):
+    _LOGO_SVG = """
+    <svg xmlns='http://www.w3.org/2000/svg' width='180' height='70' viewBox='0 0 180 70'>
+        <defs>
+            <linearGradient id='g' x1='0%' y1='0%' x2='100%' y2='0%'>
+                <stop offset='0%' stop-color='#7bc4b2'/>
+                <stop offset='100%' stop-color='#1c6b66'/>
+            </linearGradient>
+        </defs>
+        <rect x='0' y='10' width='180' height='50' rx='25' fill='url(#g)'/>
+        <text x='90' y='45' font-family="Segoe UI, Arial, sans-serif" font-size='28' text-anchor='middle' fill='#f5fbfa'>Ciao</text>
+        <text x='132' y='45' font-family="Segoe UI, Arial, sans-serif" font-size='16' text-anchor='start' fill='#f5fbfa'>a Mano</text>
+    </svg>
+    """.strip()
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Create Invoice")
+        self.setMinimumWidth(540)
+        self.setSizeGripEnabled(True)
+
+        self._logo_cache: str | None = None
+        self.product_rows: list[dict[str, QWidget]] = []
+
+        outer = QVBoxLayout(self)
+        form = QFormLayout()
+        form.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.AllNonFixedFieldsGrow)
+
+        self.products_container = QWidget()
+        self.products_layout = QVBoxLayout(self.products_container)
+        self.products_layout.setContentsMargins(0, 0, 0, 0)
+        self.products_layout.setSpacing(8)
+
+        form.addRow("Products:", self.products_container)
+
+        self.date_edit = QDateEdit()
+        self.date_edit.setCalendarPopup(True)
+        self.date_edit.setDisplayFormat("yyyy-MM-dd")
+        self.date_edit.setDate(QDate.currentDate())
+        form.addRow("Date:", self.date_edit)
+
+        self.client_name_edit = QLineEdit()
+        self.client_name_edit.setPlaceholderText("Client name")
+        form.addRow("Client name:", self.client_name_edit)
+
+        self.client_address_edit = QPlainTextEdit()
+        self.client_address_edit.setPlaceholderText("Client address")
+        self.client_address_edit.setFixedHeight(70)
+        self.client_address_edit.setTabChangesFocus(True)
+        form.addRow("Client address:", self.client_address_edit)
+
+        outer.addLayout(form)
+
+        self._add_product_row()
+
+        outer.addStretch(1)
+        btn_row = QHBoxLayout()
+        btn_row.addStretch(1)
+        self.generate_btn = QPushButton("Generate PDF")
+        self.generate_btn.setDefault(True)
+        btn_row.addWidget(self.generate_btn)
+        outer.addLayout(btn_row)
+
+        self.generate_btn.clicked.connect(self._generate_pdf)
+
+    def _logo_data_uri(self) -> str:
+        if not self._logo_cache:
+            encoded = base64.b64encode(self._LOGO_SVG.encode("utf-8")).decode("ascii")
+            self._logo_cache = f"data:image/svg+xml;base64,{encoded}"
+        return self._logo_cache
+
+    def _add_product_row(self) -> None:
+        row_widget = QWidget()
+        layout = QHBoxLayout(row_widget)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(6)
+
+        code_edit = QLineEdit()
+        code_edit.setPlaceholderText("Product ID")
+        code_edit.setMinimumWidth(140)
+
+        qty_edit = QLineEdit()
+        qty_edit.setPlaceholderText("Qty")
+        qty_edit.setValidator(QIntValidator(1, 1_000_000, self))
+        qty_edit.setFixedWidth(80)
+
+        add_btn = QPushButton("+")
+        add_btn.setFixedWidth(32)
+        add_btn.clicked.connect(self._add_product_row)
+
+        remove_btn = QPushButton("-")
+        remove_btn.setFixedWidth(32)
+        remove_btn.clicked.connect(lambda: self._remove_product_row(row_widget))
+
+        layout.addWidget(code_edit, 1)
+        layout.addWidget(qty_edit)
+        layout.addWidget(add_btn)
+        layout.addWidget(remove_btn)
+
+        self.products_layout.addWidget(row_widget)
+        self.product_rows.append(
+            {
+                "container": row_widget,
+                "code": code_edit,
+                "qty": qty_edit,
+                "remove_btn": remove_btn,
+            }
+        )
+        self._update_remove_buttons()
+        code_edit.setFocus()
+
+    def _remove_product_row(self, row_widget: QWidget) -> None:
+        for idx, row in enumerate(self.product_rows):
+            if row["container"] is row_widget:
+                self.product_rows.pop(idx)
+                break
+        self.products_layout.removeWidget(row_widget)
+        row_widget.deleteLater()
+        if not self.product_rows:
+            self._add_product_row()
+            return
+        self._update_remove_buttons()
+
+    def _update_remove_buttons(self) -> None:
+        show_remove = len(self.product_rows) > 1
+        for row in self.product_rows:
+            row["remove_btn"].setVisible(show_remove)
+
+    def _format_currency(self, value: float) -> str:
+        return f"C${value:,.2f}"
+
+    def _generate_pdf(self) -> None:
+        items: list[tuple[Product, int]] = []
+        for row in self.product_rows:
+            code = row["code"].text().strip()
+            qty_text = row["qty"].text().strip()
+            if not code or not qty_text:
+                QMessageBox.warning(self, "Missing information", "Please fill in the product ID and quantity for each item.")
+                return
+            try:
+                qty = int(qty_text)
+            except ValueError:
+                QMessageBox.warning(self, "Invalid quantity", "Quantity must be a whole number.")
+                row["qty"].setFocus()
+                return
+            if qty <= 0:
+                QMessageBox.warning(self, "Invalid quantity", "Quantity must be at least 1.")
+                row["qty"].setFocus()
+                return
+            product = storage.get_product_by_id(code)
+            if not product:
+                QMessageBox.warning(self, "Product not found", f"Product with ID '{code}' was not found.")
+                row["code"].setFocus()
+                return
+            items.append((product, qty))
+
+        if not items:
+            QMessageBox.warning(self, "No products", "Please add at least one product to create an invoice.")
+            return
+
+        path, _ = QFileDialog.getSaveFileName(self, "Save Invoice PDF", "", "PDF Files (*.pdf)")
+        if not path:
+            return
+        if not path.lower().endswith(".pdf"):
+            path += ".pdf"
+
+        invoice_date = self.date_edit.date().toString("yyyy-MM-dd")
+        client_name = self.client_name_edit.text().strip()
+        client_address = self.client_address_edit.toPlainText().strip()
+
+        html = self._build_invoice_html(items, invoice_date, client_name, client_address)
+
+        printer = QPrinter(QPrinter.PrinterMode.HighResolution)
+        printer.setOutputFormat(QPrinter.OutputFormat.PdfFormat)
+        printer.setOutputFileName(path)
+        printer.setPageMargins(QMarginsF(12, 12, 12, 12), QPageLayout.Unit.Millimeter)
+
+        document = QTextDocument()
+        document.setDocumentMargin(12)
+        document.setHtml(html)
+
+        try:
+            document.print(printer)
+        except Exception as exc:
+            QMessageBox.critical(self, "Export failed", f"Could not create PDF:\n{exc}")
+            return
+
+        QMessageBox.information(self, "Invoice created", f"Invoice saved to:\n{path}")
+        self.accept()
+
+    def _build_invoice_html(
+        self,
+        items: list[tuple[Product, int]],
+        invoice_date: str,
+        client_name: str,
+        client_address: str,
+    ) -> str:
+        rate = float(storage.get_conversion_rate())
+
+        rows: list[str] = []
+        total = 0.0
+        for product, qty in items:
+            unit_c = float(product.price) * rate
+            line_total = unit_c * qty
+            total += line_total
+
+            description_parts: list[str] = []
+            if product.description:
+                description_parts = [escape(part) for part in product.description.splitlines() if part.strip()]
+            desc_html = f"<div class='prod-name'>{escape(product.name)}</div>"
+            if description_parts:
+                desc_html += "<div class='prod-desc'>" + "<br>".join(description_parts) + "</div>"
+
+            rows.append(
+                "<tr>"
+                f"<td class='qty'>{qty}</td>"
+                f"<td class='desc'>{desc_html}</td>"
+                f"<td class='unit'>{self._format_currency(unit_c)}</td>"
+                f"<td class='total'>{self._format_currency(line_total)}</td>"
+                "</tr>"
+            )
+
+        if client_name:
+            client_name_html = escape(client_name)
+        else:
+            client_name_html = "<span class='placeholder'>Cliente no especificado</span>"
+
+        if client_address:
+            address_html = "<br>".join(
+                escape(line.strip()) for line in client_address.splitlines() if line.strip()
+            )
+        else:
+            address_html = "<span class='placeholder'>Sin dirección proporcionada</span>"
+
+        rows_html = "\n".join(rows)
+
+        return f"""
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset='utf-8'>
+    <style>
+        body {{ font-family: 'Segoe UI', Arial, sans-serif; margin: 0; background: #f4f7f6; }}
+        .invoice {{ background: #ffffff; margin: 0 auto; padding: 36px; width: 100%; box-sizing: border-box; }}
+        .header {{ display: flex; justify-content: space-between; align-items: center; border-bottom: 4px solid #7bc4b2; padding-bottom: 18px; }}
+        .title {{ font-size: 28px; letter-spacing: 2px; color: #1c6b66; font-weight: 700; }}
+        .logo img {{ height: 70px; }}
+        .meta {{ display: flex; justify-content: space-between; margin-top: 24px; gap: 48px; }}
+        .meta .section-title {{ font-weight: 600; text-transform: uppercase; color: #1c6b66; margin-top: 12px; font-size: 12px; letter-spacing: 0.8px; }}
+        .meta .value {{ font-size: 13px; color: #2f3a3a; margin-top: 6px; }}
+        .meta .address {{ white-space: pre-line; }}
+        table {{ width: 100%; border-collapse: collapse; margin-top: 28px; }}
+        th {{ text-transform: uppercase; font-size: 11px; letter-spacing: 1px; text-align: left; padding: 10px; background: #e8f5f2; color: #1c6b66; }}
+        td {{ padding: 12px 10px; border-bottom: 1px solid #d8e6e1; font-size: 13px; vertical-align: top; }}
+        td.qty {{ width: 70px; text-align: center; font-weight: 600; color: #1c3d3b; }}
+        td.unit, td.total {{ width: 120px; text-align: right; font-weight: 600; color: #1c6b66; }}
+        .prod-name {{ font-weight: 600; color: #1c3d3b; margin-bottom: 4px; }}
+        .prod-desc {{ color: #4c5b59; font-size: 12px; line-height: 1.5; }}
+        tfoot td {{ font-size: 14px; font-weight: 700; padding-top: 16px; border-bottom: none; }}
+        tfoot td.label {{ text-align: right; text-transform: uppercase; color: #1c6b66; }}
+        .footer-bar {{ margin-top: 32px; height: 6px; background: linear-gradient(90deg, #7bc4b2, #1c6b66); border-radius: 6px; }}
+        .placeholder {{ color: #92a5a1; font-style: italic; }}
+    </style>
+</head>
+<body>
+    <div class='invoice'>
+        <div class='header'>
+            <div class='title'>PROFORMA</div>
+            <div class='logo'><img src='{self._logo_data_uri()}' alt='Ciao a Mano logo'></div>
+        </div>
+        <div class='meta'>
+            <div class='left'>
+                <div class='section-title'>Fecha</div>
+                <div class='value'>{escape(invoice_date)}</div>
+                <div class='section-title'>Enviado a</div>
+                <div class='value'>{client_name_html}</div>
+                <div class='value address'>{address_html}</div>
+            </div>
+            <div class='right'>
+                <div class='section-title'>Enviado por</div>
+                <div class='value'>Ciao a Mano</div>
+                <div class='value'>Km 10.5 Carretera Sur</div>
+                <div class='value'>Del Colegio Aleman</div>
+                <div class='value'>750 MTS Oeste</div>
+                <div class='value'>ciaoamano@gmail.com</div>
+            </div>
+        </div>
+        <table>
+            <thead>
+                <tr>
+                    <th>Cantidad</th>
+                    <th>Descripción</th>
+                    <th>P. Unitario</th>
+                    <th>Total Línea</th>
+                </tr>
+            </thead>
+            <tbody>
+                {rows_html}
+            </tbody>
+            <tfoot>
+                <tr>
+                    <td colspan='3' class='label'>Total</td>
+                    <td class='total'>{self._format_currency(total)}</td>
+                </tr>
+            </tfoot>
+        </table>
+        <div class='footer-bar'></div>
+    </div>
+</body>
+</html>
+""".strip()
 
 class EditProductDialog(QDialog):
     def __init__(self, product: Product, parent=None, readonly: bool = False):
