@@ -457,7 +457,9 @@ def list_sold_products() -> list[dict]:
             s.location_type,
             s.local_id,
             p.name,
+            p.description,
             p.price,
+            s.client,
             l.name as local_name
         FROM sold_products s
         JOIN products p ON p.prod_id = s.prod_id
@@ -477,8 +479,10 @@ def list_sold_products() -> list[dict]:
             "location_type": row[5],
             "local_id": row[6],
             "name": row[7],
-            "price": float(row[8]),
-            "local_name": row[9],
+            "price": float(row[9]),
+            "description": row[8],
+            "client": row[10],
+            "local_name": row[11],
         }
         for row in rows
     ]

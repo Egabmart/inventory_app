@@ -6,11 +6,65 @@ from PyQt6.QtWidgets import (
     QPushButton,
     QTableWidget,
     QTableWidgetItem,
+    QVBoxLayout,
 )
 
 from .base import BaseWindow
 from .. import storage
 from ..forms import RegisterSaleDialog
+
+class SaleDetailsDialog(QDialog):
+    def __init__(self, sale: dict, parent=None) -> None:
+        super().__init__(parent)
+        self.setWindowTitle("Sale Details")
+        self.setMinimumWidth(360)
+
+        layout = QVBoxLayout(self)
+
+        self.table = QTableWidget(0, 2)
+        self.table.setHorizontalHeaderLabels(["Field", "Value"])
+        self.table.verticalHeader().setVisible(False)
+        self.table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        self.table.setSelectionMode(QTableWidget.SelectionMode.NoSelection)
+        self.table.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        self.table.setWordWrap(True)
+
+        header = self.table.horizontalHeader()
+        header.setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
+        header.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
+
+        layout.addWidget(self.table)
+
+        rows = [
+            ("Product ID", sale.get("prod_id", "")),
+            ("Product name", sale.get("name", "")),
+            ("Product description", sale.get("description", "")),
+            ("Quantity", str(sale.get("qty", ""))),
+            ("Price in C$", sale.get("price_cad", "")),
+            ("Price in $", sale.get("price_usd", "")),
+            ("Date", sale.get("sold_on", "")),
+            ("Location", sale.get("location", "")),
+            ("Client name", sale.get("client", "")),
+        ]
+
+        for label, value in rows:
+            row_idx = self.table.rowCount()
+            self.table.insertRow(row_idx)
+            label_item = QTableWidgetItem(label)
+            label_item.setFlags(label_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
+            value_item = QTableWidgetItem(str(value))
+            value_item.setFlags(value_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
+            self.table.setItem(row_idx, 0, label_item)
+            self.table.setItem(row_idx, 1, value_item)
+
+        actions = QHBoxLayout()
+        actions.addStretch(1)
+        back_button = QPushButton("Back")
+        back_button.clicked.connect(self.accept)
+        actions.addWidget(back_button)
+
+        layout.addLayout(actions)
+
 
 
 class SalesWindow(BaseWindow):
@@ -55,6 +109,7 @@ class SalesWindow(BaseWindow):
         main_layout.addWidget(self.sales_table)
 
         self.register_button.clicked.connect(self.open_register_sales_dialog)
+        self.sales_table.cellClicked.connect(self._open_sale_details)
         self.refresh_sales_table()
 
     def open_register_sales_dialog(self) -> None:
@@ -78,13 +133,27 @@ class SalesWindow(BaseWindow):
 
             date_item = QTableWidgetItem(sale.get("sold_on") or "")
             id_item = QTableWidgetItem(sale["prod_id"])
-            id_item.setData(Qt.ItemDataRole.UserRole, sale["sale_id"])
             name_item = QTableWidgetItem(sale["name"])
 
             location = self._format_location(sale)
             qty = int(sale["qty"])
             price_usd = float(sale["price"])
             price_cad = price_usd * rate
+
+            sale_details = {
+                "sale_id": sale["sale_id"],
+                "prod_id": sale["prod_id"],
+                "name": sale["name"],
+                "description": sale.get("description") or "",
+                "qty": str(qty),
+                "price_usd": f"{price_usd:.2f}",
+                "price_cad": f"{price_cad:.2f}",
+                "sold_on": sale.get("sold_on") or "",
+                "location": location,
+                "client": sale.get("client") or "",
+            }
+
+            date_item.setData(Qt.ItemDataRole.UserRole, sale_details)
 
             location_item = QTableWidgetItem(location)
 
@@ -119,3 +188,14 @@ class SalesWindow(BaseWindow):
         if location_type == "online":
             return "Online"
         return location_type.capitalize() if location_type else ""
+
+    def _open_sale_details(self, row: int, column: int) -> None:
+        del column
+        item = self.sales_table.item(row, 0)
+        if not item:
+            return
+        sale = item.data(Qt.ItemDataRole.UserRole)
+        if not isinstance(sale, dict):
+            return
+        dialog = SaleDetailsDialog(sale, self)
+        dialog.exec()
