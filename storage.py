@@ -442,12 +442,19 @@ def search_products(term: str) -> list[Product]:
         results.append(Product(row[0], sub, row[2], row[3], float(row[4]), int(row[5])))
     return results
 
-def list_sold_products() -> list[dict]:
-    """Return sold products sorted from most recent to oldest."""
+def list_sold_products(
+    department_id: int | None = None,
+    subdepartment_id: int | None = None,
+    location_type: str | None = None,
+    local_id: int | None = None,
+) -> list[dict]:
+    """Return sold products sorted from most recent to oldest.
+
+    Optional filters can be applied by department, subdepartment and location.
+    """
 
     conn = get_conn()
-    rows = conn.execute(
-        """
+    query = """
         SELECT
             s.sale_id,
             s.prod_id,
@@ -460,13 +467,44 @@ def list_sold_products() -> list[dict]:
             p.description,
             p.price,
             s.client,
-            l.name as local_name
+            l.name as local_name,
+            d.dept_id,
+            d.name as dept_name,
+            sd.sub_id,
+            sd.name as sub_name
         FROM sold_products s
         JOIN products p ON p.prod_id = s.prod_id
+        JOIN subdepartments sd ON sd.sub_id = p.parent_sub_id
+        JOIN departments d ON d.dept_id = sd.parent_dept_id
         LEFT JOIN locals l ON l.local_id = s.local_id
-        ORDER BY datetime(s.sold_at) DESC, s.sale_id DESC
         """
-    ).fetchall()
+    clauses: list[str] = []
+    params: list[object] = []
+
+    if department_id is not None:
+        clauses.append("d.dept_id = ?")
+        params.append(int(department_id))
+
+    if subdepartment_id is not None:
+        clauses.append("sd.sub_id = ?")
+        params.append(int(subdepartment_id))
+
+    if location_type:
+        clauses.append("s.location_type = ?")
+        params.append(location_type)
+        if location_type.lower() == "local" and local_id is not None:
+            clauses.append("s.local_id = ?")
+            params.append(int(local_id))
+    elif local_id is not None:
+        clauses.append("s.local_id = ?")
+        params.append(int(local_id))
+
+    if clauses:
+        query += " WHERE " + " AND ".join(clauses)
+
+    query += " ORDER BY datetime(s.sold_at) DESC, s.sale_id DESC"
+
+    rows = conn.execute(query, params).fetchall()
     conn.close()
 
     return [
@@ -483,6 +521,10 @@ def list_sold_products() -> list[dict]:
             "description": row[8],
             "client": row[10],
             "local_name": row[11],
+            "department_id": row[12],
+            "department_name": row[13],
+            "subdepartment_id": row[14],
+            "subdepartment_name": row[15],
         }
         for row in rows
     ]
