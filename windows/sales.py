@@ -73,7 +73,7 @@ class SaleDetailsDialog(QDialog):
 
 class SalesWindow(BaseWindow):
     def __init__(self) -> None:
-        super().__init__("Sales - My App", "Sales")
+        super().__init__("Sales - Inventory App", "Sales")
         self.set_page_title("Register Sales")
 
         main_layout = self.content_layout

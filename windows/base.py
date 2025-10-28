@@ -2,8 +2,10 @@ from __future__ import annotations
 
 from typing import Callable, ClassVar, Dict, List
 from html import escape
+from pathlib import Path
+
 from PyQt6.QtCore import QMarginsF,Qt
-from PyQt6.QtGui import QTextDocument, QPageLayout
+from PyQt6.QtGui import QTextDocument, QPageLayout, QIcon
 from PyQt6.QtWidgets import (
     QButtonGroup,
     QGridLayout,
@@ -53,6 +55,10 @@ class NavButton(QPushButton):
         )
 
 
+APP_NAME = "Inventory App"
+APP_ICON_PATH = Path(__file__).resolve().parent.parent / "Assets" / "Inventory_app_logo.png"
+APP_ICON = QIcon(str(APP_ICON_PATH))
+
 class BaseWindow(QMainWindow):
     """Shared application window layout with top navigation."""
 
@@ -61,8 +67,10 @@ class BaseWindow(QMainWindow):
     def __init__(self, title: str, current_section: str) -> None:
         super().__init__()
         self.setWindowTitle(title)
+        if not APP_ICON.isNull():
+            self.setWindowIcon(APP_ICON)
         self.resize(1100, 720)
-        self._current_section = current_section 
+        self._current_section = current_section
 
         storage.init_db()
 
@@ -80,7 +88,7 @@ class BaseWindow(QMainWindow):
         top_layout.setContentsMargins(16, 8, 16, 8)
         top_layout.setSpacing(12)
 
-        self._brand_label = QLabel("Inventory App")
+        self._brand_label = QLabel(APP_NAME)
         self._brand_label.setStyleSheet(
             "background: transparent; color: white; font-weight: 600; font-size: 18px;"
         )

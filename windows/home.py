@@ -6,7 +6,7 @@ from ..forms import EditProductDialog, RegisterSaleDialog
 
 class HomeWindow(BaseWindow):
     def __init__(self):
-        super().__init__("Home - My App", "Home")
+        super().__init__("Home - Inventory App", "Home")
         self.set_page_title("Home")
         main_layout = self.content_layout
 

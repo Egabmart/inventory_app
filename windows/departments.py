@@ -19,7 +19,7 @@ from .. import storage
 
 class DepartmentsWindow(BaseWindow):
     def __init__(self):
-        super().__init__("Departments - My App", "Departments")
+        super().__init__("Departments - Inventory App", "Departments")
         self.set_page_title("Departments")
         main_layout = self.content_layout
         self.stack = QStackedWidget()

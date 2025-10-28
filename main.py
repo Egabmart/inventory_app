@@ -8,13 +8,18 @@ if __package__ in (None, ""):
         sys.path.insert(0, package_root)
     from windows.departments import DepartmentsWindow
     import storage
+    from windows.base import APP_NAME, APP_ICON
 else:
     from .windows.departments import DepartmentsWindow
+    from .windows.base import APP_NAME, APP_ICON
     from . import storage
 
 def main():
     storage.init_db()
     app = QApplication(sys.argv)
+    app.setApplicationName(APP_NAME)
+    if not APP_ICON.isNull():
+        app.setWindowIcon(APP_ICON)
     win = DepartmentsWindow()
     win.show()
     sys.exit(app.exec())

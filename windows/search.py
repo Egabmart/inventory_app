@@ -16,7 +16,7 @@ from ..models import Product
 
 class SearchWindow(BaseWindow):
     def __init__(self) -> None:
-        super().__init__("Search - My App", "Search")
+        super().__init__("Search - Inventory App", "Search")
         self.set_page_title("Search Products")
 
         main_layout = self.content_layout

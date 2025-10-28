@@ -6,7 +6,7 @@ from .. import storage
 
 class LocalsWindow(BaseWindow):
     def __init__(self):
-        super().__init__("Locals - My App", "Locals")
+        super().__init__("Locals - Inventory App", "Locals")
         self.set_page_title("Locals")
         main_layout = self.content_layout
 
