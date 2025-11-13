@@ -1,0 +1,1 @@
+../Resources/UiNewWindow.py

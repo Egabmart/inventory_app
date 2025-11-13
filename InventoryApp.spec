@@ -2,6 +2,12 @@
 
 from pathlib import Path
 
+def first_existing_path(paths: list[str]) -> str | None:
+    for path in paths:
+        if Path(path).exists():
+            return path
+    return None
+
 extra_datas: list[tuple[str, str]] = []
 for source, target in [
     ('forms', 'forms'),
@@ -16,7 +22,12 @@ for source, target in [
     if Path(source).exists():
         extra_datas.append((source, target))
 
-
+icon_path = first_existing_path([
+    'assets/app.icns',
+    'Assets/app.icns',
+    'assets/app.ico',
+    'Assets/app.ico',
+])
 
 a = Analysis(
     ['main.py'],
@@ -49,7 +60,7 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon=['assets/app.ico'],
+    icon=icon_path,
 )
 coll = COLLECT(
     exe,
@@ -63,6 +74,6 @@ coll = COLLECT(
 app = BUNDLE(
     coll,
     name='InventoryApp.app',
-    icon='assets/app.ico',
+    icon=icon_path,
     bundle_identifier=None,
 )
