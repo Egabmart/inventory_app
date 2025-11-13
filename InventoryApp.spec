@@ -1,11 +1,28 @@
 # -*- mode: python ; coding: utf-8 -*-
 
+from pathlib import Path
+
+extra_datas: list[tuple[str, str]] = []
+for source, target in [
+    ('forms', 'forms'),
+    ('windows', 'windows'),
+    ('models.py', '.'),
+    ('storage.py', '.'),
+    ('forms.py', '.'),
+    ('UiNewWindow.py', '.'),
+    ('assets', 'assets'),
+    ('Assets', 'Assets'),
+]:
+    if Path(source).exists():
+        extra_datas.append((source, target))
+
+
 
 a = Analysis(
     ['main.py'],
     pathex=[],
     binaries=[],
-    datas=[],
+    datas=extra_datas,
     hiddenimports=[],
     hookspath=[],
     hooksconfig={},
