@@ -18,7 +18,7 @@ def build_extra_data(entries: list[tuple[Iterable[str], str | None]]):
         existing = first_existing_path(candidates)
         if not existing:
             continue
-        resolved_target = Path(target) if target is not None else Path(existing).name
+        resolved_target = Path(target) if target is not None else Path(Path(existing).name)
         key = resolved_target.as_posix().lower()
         if key in seen_targets:
             continue
@@ -57,7 +57,7 @@ a = Analysis(
     pathex=[],
     binaries=[],
     datas=extra_datas,
-    hiddenimports=['html'],
+    hiddenimports=['html', 'PyQt6.QtPrintSupport'],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
