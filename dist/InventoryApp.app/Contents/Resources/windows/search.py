@@ -9,9 +9,14 @@ from PyQt6.QtWidgets import (
 )
 
 from .base import BaseWindow
-from .. import storage
-from ..forms import EditProductDialog
-from ..models import Product
+try:  # Maintain compatibility with frozen builds lacking package parents
+    from .. import storage
+    from ..forms import EditProductDialog
+    from ..models import Product
+except ImportError:  # pragma: no cover - fallback for frozen build
+    import storage  # type: ignore[import-not-found]
+    from forms import EditProductDialog  # type: ignore[import-not-found]
+    from models import Product  # type: ignore[import-not-found]
 
 
 class SearchWindow(BaseWindow):

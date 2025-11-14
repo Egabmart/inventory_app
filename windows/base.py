@@ -22,7 +22,10 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtPrintSupport import QPrinter
 
-from .. import storage
+try:  # PyInstaller may load modules as top-level packages
+    from .. import storage
+except ImportError:  # pragma: no cover - runtime fallback for frozen build
+    import storage  # type: ignore[import-not-found]
 
 
 class NavButton(QPushButton):

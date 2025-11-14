@@ -1,8 +1,12 @@
 from PyQt6.QtWidgets import QWidget, QVBoxLayout, QPushButton, QTableWidget, QTableWidgetItem, QHeaderView, QHBoxLayout, QMessageBox, QInputDialog, QLabel, QStackedWidget
 from PyQt6.QtCore import Qt
 from .base import BaseWindow, export_table_to_xlsx, export_table_to_pdf
-from ..models import Local
-from .. import storage
+try:  # Enable execution from frozen bundles where package context is lost
+    from ..models import Local
+    from .. import storage
+except ImportError:  # pragma: no cover - fallback for frozen build
+    from models import Local  # type: ignore[import-not-found]
+    import storage  # type: ignore[import-not-found]
 
 class LocalsWindow(BaseWindow):
     def __init__(self):

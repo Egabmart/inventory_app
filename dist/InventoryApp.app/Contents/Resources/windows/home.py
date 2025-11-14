@@ -1,8 +1,12 @@
 from PyQt6.QtWidgets import QHBoxLayout, QLineEdit, QPushButton, QWidget, QMessageBox
 from PyQt6.QtCore import Qt
 from .base import BaseWindow
-from .. import storage
-from ..forms import EditProductDialog, RegisterSaleDialog
+try:  # Support frozen PyInstaller builds where package parents differ
+    from .. import storage
+    from ..forms import EditProductDialog, RegisterSaleDialog
+except ImportError:  # pragma: no cover - fallback for frozen build
+    import storage  # type: ignore[import-not-found]
+    from forms import EditProductDialog, RegisterSaleDialog  # type: ignore[import-not-found]
 
 class HomeWindow(BaseWindow):
     def __init__(self):

@@ -12,8 +12,12 @@ from PyQt6.QtWidgets import (
 )
 
 from .base import BaseWindow
-from .. import storage
-from ..forms import RegisterSaleDialog
+try:  # Handle module loading differences in frozen builds
+    from .. import storage
+    from ..forms import RegisterSaleDialog
+except ImportError:  # pragma: no cover - fallback for frozen build
+    import storage  # type: ignore[import-not-found]
+    from forms import RegisterSaleDialog  # type: ignore[import-not-found]
 
 class SaleDetailsDialog(QDialog):
     def __init__(self, sale: dict, parent=None) -> None:

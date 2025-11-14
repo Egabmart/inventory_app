@@ -13,9 +13,26 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtCore import Qt
 from .base import BaseWindow, export_table_to_xlsx, export_table_to_pdf
-from ..forms import AddDepartmentForm, AddSubDepartmentForm, AddProductForm, EditProductDialog, EditSubDepartmentNameDialog
-from ..models import Department, SubDepartment, Product
-from .. import storage
+try:  # Allow running when package layout is flattened by PyInstaller
+    from ..forms import (
+        AddDepartmentForm,
+        AddSubDepartmentForm,
+        AddProductForm,
+        EditProductDialog,
+        EditSubDepartmentNameDialog,
+    )
+    from ..models import Department, SubDepartment, Product
+    from .. import storage
+except ImportError:  # pragma: no cover - fallback for frozen build
+    from forms import (  # type: ignore[import-not-found]
+        AddDepartmentForm,
+        AddSubDepartmentForm,
+        AddProductForm,
+        EditProductDialog,
+        EditSubDepartmentNameDialog,
+    )
+    from models import Department, SubDepartment, Product  # type: ignore[import-not-found]
+    import storage  # type: ignore[import-not-found]
 
 class DepartmentsWindow(BaseWindow):
     def __init__(self):

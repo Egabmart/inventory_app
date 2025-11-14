@@ -7,8 +7,12 @@ from PyQt6.QtCore import Qt, pyqtSignal, QDate, QMarginsF
 from PyQt6.QtGui import QPixmap, QIntValidator, QTextDocument, QPageLayout
 from PyQt6.QtPrintSupport import QPrinter
 from sqlite3 import IntegrityError
-from .models import Department, Product, SubDepartment, Local
-from . import storage
+try:  # Allow use from both source and frozen builds
+    from .models import Department, Product, SubDepartment, Local
+    from . import storage
+except ImportError:  # pragma: no cover - fallback when package name changes
+    from models import Department, Product, SubDepartment, Local  # type: ignore[import-not-found]
+    import storage  # type: ignore[import-not-found]
 from pathlib import Path
 
 class ImageDropArea(QFrame):
